@@ -7,7 +7,7 @@
 #include "db.h"
 #include "init.h"
 #include "activemasternode.h"
-#include "masternode-budget.h"
+#include "masternode-governance.h"
 #include "masternode-payments.h"
 #include "masternode-sync.h"
 #include "masternodeconfig.h"

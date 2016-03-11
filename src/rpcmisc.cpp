@@ -113,11 +113,11 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     return obj;
 }
 
-UniValue mnsync(const UniValue& params, bool fHelp)
+UniValue sync(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "mnsync [status|reset]\n"
+            "sync [status|reset]\n"
             "Returns the sync status or resets sync.\n"
         );
 

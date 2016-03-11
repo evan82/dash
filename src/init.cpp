@@ -34,7 +34,7 @@
 #include "ui_interface.h"
 #include "util.h"
 #include "activemasternode.h"
-#include "masternode-budget.h"
+#include "masternode-governance.h"
 #include "masternode-payments.h"
 #include "masternode-sync.h"
 #include "masternodeman.h"
@@ -873,7 +873,7 @@ void InitLogging()
     fLogIPs = GetBoolArg("-logips", DEFAULT_LOGIPS);
 
     LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    LogPrintf("Bitcoin version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
+    LogPrintf("Dash version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
 }
 
 /** Initialize dash.
@@ -1216,6 +1216,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (!AppInitServers(threadGroup))
             return InitError(_("Unable to start HTTP server. See debug log for details."));
     }
+
+    cout << "init" << "\n";
 
     int64_t nStart;
 
@@ -1828,7 +1830,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     uiInterface.InitMessage(_("Loading budget cache..."));
 
     CBudgetDB budgetdb;
-    CBudgetDB::ReadResult readResult2 = budgetdb.Read(budget);
+    CBudgetDB::ReadResult readResult2 = budgetdb.Read(governance);
 
     if (readResult2 == CBudgetDB::FileError)
         LogPrintf("Missing budget cache - budget.dat, will try to recreate\n");
@@ -1842,8 +1844,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
     //flag our cached items so we send them to our peers
-    budget.ResetSync();
-    budget.ClearSeen();
+    governance.ResetSync();
+    governance.ClearSeen();
 
     uiInterface.InitMessage(_("Loading masternode payment cache..."));
 
@@ -1950,7 +1952,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // GetMainSignals().UpdatedBlockTip(chainActive.Tip());
     darkSendPool.UpdatedBlockTip(chainActive.Tip());
     mnpayments.UpdatedBlockTip(chainActive.Tip());
-    budget.UpdatedBlockTip(chainActive.Tip());
+    governance.UpdatedBlockTip(chainActive.Tip());
     masternodeSync.UpdatedBlockTip(chainActive.Tip());
 
     // start dash-darksend thread

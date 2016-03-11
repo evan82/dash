@@ -43,9 +43,9 @@ const char *GETSPORKS="getsporks";
 const char *MNWINNER="mnw";
 const char *MNWINNERSSYNC="mnget";
 const char *MNSCANERROR="mn scan error"; // TODO ???
-const char *MNBUDGETVOTESYNC="mnvs";
-const char *MNBUDGETVOTE="mvote";
-const char *MNBUDGETPROPOSAL="mprop";
+const char *GOVERNANCE_VOTESYNC="mnvs";
+const char *GOVERNANCE_VOTE="mvote";
+const char *GOVERNANCE_OBJECT="mprop";
 const char *MNBUDGETFINAL="fbs";
 const char *MNBUDGETFINALVOTE="fbvote";
 const char *MNQUORUM="mn quorum"; // TODO ???
@@ -75,8 +75,8 @@ static const char* ppszTypeName[] =
     NetMsgType::SPORK,
     NetMsgType::MNWINNER,
     NetMsgType::MNSCANERROR,
-    NetMsgType::MNBUDGETVOTE,
-    NetMsgType::MNBUDGETPROPOSAL,
+    NetMsgType::GOVERNANCE_VOTE,
+    NetMsgType::GOVERNANCE_OBJECT,
     NetMsgType::MNBUDGETFINAL,
     NetMsgType::MNBUDGETFINALVOTE,
     NetMsgType::MNQUORUM,
@@ -119,9 +119,9 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::MNWINNER,
     NetMsgType::MNWINNERSSYNC,
     NetMsgType::MNSCANERROR,
-    NetMsgType::MNBUDGETVOTESYNC,
-    NetMsgType::MNBUDGETVOTE,
-    NetMsgType::MNBUDGETPROPOSAL,
+    NetMsgType::GOVERNANCE_VOTESYNC,
+    NetMsgType::GOVERNANCE_VOTE,
+    NetMsgType::GOVERNANCE_OBJECT,
     NetMsgType::MNBUDGETFINAL,
     NetMsgType::MNBUDGETFINALVOTE,
     NetMsgType::MNQUORUM,

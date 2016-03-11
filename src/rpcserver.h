@@ -251,15 +251,21 @@ extern UniValue sendrawtransaction(const UniValue& params, bool fHelp);
 extern UniValue gettxoutproof(const UniValue& params, bool fHelp);
 extern UniValue verifytxoutproof(const UniValue& params, bool fHelp);
 
+// Dash Governance Functions 
+extern UniValue spork(const UniValue& params, bool fHelp); //deprecated
+extern UniValue proposal(const UniValue& params, bool fHelp);
+extern UniValue contract(const UniValue& params, bool fHelp);
+extern UniValue budget(const UniValue& params, bool fHelp); //shows proposals and contracts
+//extern UniValue switch(const UniValue& params, bool fHelp);
+//extern UniValue setting(const UniValue& params, bool fHelp);
+extern UniValue vote(const UniValue& params, bool fHelp); //vote on any governance object
+extern UniValue superblock(const UniValue& params, bool fHelp); //show superblock data
+
 extern UniValue darksend(const UniValue& params, bool fHelp);
 extern UniValue getpoolinfo(const UniValue& params, bool fHelp);
-extern UniValue spork(const UniValue& params, bool fHelp);
 extern UniValue masternode(const UniValue& params, bool fHelp);
 extern UniValue masternodelist(const UniValue& params, bool fHelp);
-extern UniValue mnbudget(const UniValue& params, bool fHelp);
-extern UniValue mnbudgetvoteraw(const UniValue& params, bool fHelp);
-extern UniValue mnfinalbudget(const UniValue& params, bool fHelp);
-extern UniValue mnsync(const UniValue& params, bool fHelp);
+extern UniValue sync(const UniValue& params, bool fHelp);
 
 extern UniValue getblockcount(const UniValue& params, bool fHelp); // in rpcblockchain.cpp
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);

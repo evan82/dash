@@ -76,7 +76,25 @@ public:
         consensus.nMasternodePaymentsStartBlock = 100000; // not true, but it's ok as long as it's less then nMasternodePaymentsIncreaseBlock
         consensus.nMasternodePaymentsIncreaseBlock = 158000;
         consensus.nMasternodePaymentsIncreasePeriod = 576*30;
+
+        /*
+
+            Bootstrapping the Dash Economy in three simple steps. 
+
+            Phase I: Starting masternodes as bonded-fullnodes, which are paid interest. 
+            Phase II: After we have significant network equipment (3000-4000 full-nodes) and a marketcap in excess of $7/DASH
+
+                    - Boost budgeting by 2.5
+                    - Add network contracts
+                    - Target building out current software requirements for a full fledged version of Evolution
+                    - $ Targeting $130k/mo, in excess of $1M funding in 2016
+
+            Phase III : Lower reward and activate masternode based voting to increase/decrease percentage (v12.3?)
+
+        */
         consensus.nBudgetPaymentsStartBlock = 328008;
+        consensus.nBudgetPaymentsStartBlock_II = 328008+(90*576); //3 months from March 10, 2016
+        
         consensus.nBudgetPaymentsCycleBlocks = 16616;
         consensus.nBudgetPaymentsWindowBlocks = 100;
         consensus.nBudgetProposalEstablishingTime = 60*60*24;
@@ -181,6 +199,7 @@ public:
         consensus.nMasternodePaymentsIncreaseBlock = 46000;
         consensus.nMasternodePaymentsIncreasePeriod = 576;
         consensus.nBudgetPaymentsStartBlock = 78476;
+        consensus.nBudgetPaymentsStartBlock_II = 78476+(90*576); //3 months from March 10, 2016
         consensus.nBudgetPaymentsCycleBlocks = 50;
         consensus.nBudgetPaymentsWindowBlocks = 10;
         consensus.nBudgetProposalEstablishingTime = 60*20;
@@ -252,7 +271,7 @@ public:
             500
         };
 
-    }
+    } 
 };
 static CTestNetParams testNetParams;
 
@@ -268,6 +287,7 @@ public:
         consensus.nMasternodePaymentsIncreaseBlock = 350;
         consensus.nMasternodePaymentsIncreasePeriod = 10;
         consensus.nBudgetPaymentsStartBlock = 1000;
+        consensus.nBudgetPaymentsStartBlock_II = 1000+(90); //3 months from March 10, 2016
         consensus.nBudgetPaymentsCycleBlocks = 50;
         consensus.nBudgetPaymentsWindowBlocks = 100;
         consensus.nBudgetProposalEstablishingTime = 60*20;
