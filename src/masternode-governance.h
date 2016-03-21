@@ -494,7 +494,6 @@ public:
         //for syncing with other clients
         READWRITE(LIMITED_STRING(strName, 20));
         READWRITE(LIMITED_STRING(strURL, 64));
-        READWRITE(nTime);
         READWRITE(nBlockStart);
         READWRITE(nBlockEnd);
         READWRITE(nAmount);
@@ -591,7 +590,7 @@ public:
     bool fValid; //if the vote is currently valid / counted
     bool fSynced; //if we've sent this to our peers
     CTxIn vin;
-    uint256 nParentHash;
+    uint256 nParentHash; //Object hash which is the parent (proposal, setting, contract, final budget)
     int nVote;
     int64_t nTime;
     std::vector<unsigned char> vchSig;

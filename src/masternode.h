@@ -36,7 +36,8 @@ bool GetBlockHash(uint256& hash, int nBlockHeight);
 //
 
 class CMasternodePing
-{
+{   // **** Objects and memory ****
+
 public:
 
     CTxIn vin;
@@ -45,19 +46,13 @@ public:
     std::vector<unsigned char> vchSig;
     //removed stop
 
+    // **** Initialization ****
+
     CMasternodePing();
     CMasternodePing(CTxIn& newVin);
 
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        READWRITE(vin);
-        READWRITE(blockHash);
-        READWRITE(sigTime);
-        READWRITE(vchSig);
-    }
-
+    // **** Statistics / Information / Update / Search ****
+    
     bool CheckAndUpdate(int& nDos, bool fRequireEnabled = true);
     bool Sign(CKey& keyMasternode, CPubKey& pubKeyMasternode);
     void Relay();
@@ -94,6 +89,18 @@ public:
     friend bool operator!=(const CMasternodePing& a, const CMasternodePing& b)
     {
         return !(a == b);
+    }
+
+    // **** Serializer ****
+    
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+        READWRITE(vin);
+        READWRITE(blockHash);
+        READWRITE(sigTime);
+        READWRITE(vchSig);
     }
 
 };
