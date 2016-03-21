@@ -182,8 +182,9 @@ public:
     CGovernanceObject *FindGovernanceObject(uint256 nHash);
     CFinalizedBudget *FindFinalizedBudget(uint256 nHash);
     GovernanceObjectType GetGovernanceTypeByHash(uint256 nHash);
-    std::pair<std::string, std::string> GetVotes(std::string strName);
     std::vector<CGovernanceObject*> GetBudget();
+    std::pair<std::string, std::string> GetSettings();
+    
     std::vector<CGovernanceObject*> FindMatchingGovernanceObjects(GovernanceObjectType type);
     std::vector<CFinalizedBudget*> GetFinalizedBudgets();
     std::string GetRequiredPaymentsString(int nBlockHeight);
@@ -432,8 +433,8 @@ public:
     void CreateProposalOrContract(GovernanceObjectType nTypeIn, std::string strNameIn, std::string strURLIn, int nPaymentCount, CScript addressIn, CAmount nAmountIn, int nBlockStartIn, uint256 nFeeTXHashIn);
     void CreateProposal(std::string strNameIn, std::string strURLIn, int nPaymentCount, CScript addressIn, CAmount nAmountIn, int nBlockStartIn, uint256 nFeeTXHashIn);
     void CreateContract(std::string strNameIn, std::string strURLIn, int nPaymentCount, CScript addressIn, CAmount nAmountIn, int nBlockStartIn, uint256 nFeeTXHashIn);
-    void CreateSwitch(std::string strNameIn, std::string strURLIn, uint256 nFeeTXHashIn);
-    void CreateSetting(std::string strNameIn, std::string strURLIn, uint256 nFeeTXHashIn);
+    void CreateSwitch(std::string strNameIn, std::string strURLIn, double nTriggerAt1to100, uint256 nFeeTXHashIn);
+    void CreateSetting(std::string strNameIn, std::string strURLIn, double nTriggerAt1to100, uint256 nFeeTXHashIn);
     
     bool HasMinimumRequiredSupport();
 
@@ -520,7 +521,12 @@ public:
     CGovernanceObjectBroadcast() : CGovernanceObject(){}
     CGovernanceObjectBroadcast(const CGovernanceObject& other) : CGovernanceObject(other){}
     CGovernanceObjectBroadcast(const CGovernanceObjectBroadcast& other) : CGovernanceObject(other){}
-    CGovernanceObjectBroadcast(GovernanceObjectType nGovernanceTypeIn, std::string strNameIn, std::string strURLIn, int nPaymentCount, CScript addressIn, CAmount nAmountIn, int nBlockStartIn, uint256 nFeeTXHashIn) {}
+
+    void CreateProposalOrContract(GovernanceObjectType nTypeIn, std::string strNameIn, std::string strURLIn, int nPaymentCount, CScript addressIn, CAmount nAmountIn, int nBlockStartIn, uint256 nFeeTXHashIn);
+    void CreateProposal(std::string strNameIn, std::string strURLIn, int nPaymentCount, CScript addressIn, CAmount nAmountIn, int nBlockStartIn, uint256 nFeeTXHashIn);
+    void CreateContract(std::string strNameIn, std::string strURLIn, int nPaymentCount, CScript addressIn, CAmount nAmountIn, int nBlockStartIn, uint256 nFeeTXHashIn);
+    void CreateSwitch(std::string strNameIn, std::string strURLIn, uint256 nFeeTXHashIn);
+    void CreateSetting(std::string strNameIn, std::string strURLIn, uint256 nFeeTXHashIn);
 
     void swap(CGovernanceObjectBroadcast& first, CGovernanceObjectBroadcast& second) // nothrow
     {

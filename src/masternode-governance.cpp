@@ -634,6 +634,82 @@ std::vector<CGovernanceObject*> CGovernanceManager::GetBudget()
     std::map<uint256, CGovernanceObject>::iterator it = mapGovernanceObjects.begin();
     while(it != mapGovernanceObjects.end()){
         (*it).second.CleanAndRemove(false);
+
+        if((*it).second.GetGovernanceType() == Proposal)
+            vBudgetPorposalsSort.push_back(make_pair(&((*it).second), (*it).second.GetYesCount()-(*it).second.GetNoCount()));
+
+        if((*it).second.GetGovernanceType() == Contract) //contracts have priority queue 
+            vBudgetPorposalsSort.push_back(make_pair(&((*it).second), 90000+((*it).second.GetYesCount()-(*it).second.GetNoCount())));
+        
+        ++it;
+    }
+
+    std::sort(vBudgetPorposalsSort.begin(), vBudgetPorposalsSort.end(), sortProposalsByVotes());
+
+    // ------- Grab The Budgets In Order
+
+    std::vector<CGovernanceObject*> vBudgetProposalsRet;
+
+    CAmount nBudgetAllocated = 0;
+    if(!pCurrentBlockIndex) return vBudgetProposalsRet;
+
+    int nBlockStart = pCurrentBlockIndex->nHeight - pCurrentBlockIndex->nHeight % Params().GetConsensus().nBudgetPaymentsCycleBlocks + Params().GetConsensus().nBudgetPaymentsCycleBlocks;
+    int nBlockEnd  =  nBlockStart + Params().GetConsensus().nBudgetPaymentsWindowBlocks;
+    CAmount nTotalBudget = GetTotalBudget(nBlockStart);
+
+
+    std::vector<std::pair<CGovernanceObject*, int> >::iterator it2 = vBudgetPorposalsSort.begin();
+    while(it2 != vBudgetPorposalsSort.end())
+    {
+        CGovernanceObject* pbudgetProposal = (*it2).first;
+
+
+        printf("-> Budget Name : %s\n", pbudgetProposal->strName.c_str());
+        printf("------- nBlockStart : %d\n", pbudgetProposal->nBlockStart);
+        printf("------- nBlockEnd : %d\n", pbudgetProposal->nBlockEnd);
+        printf("------- nBlockStart2 : %d\n", nBlockStart);
+        printf("------- nBlockEnd2 : %d\n", nBlockEnd);
+
+        printf("------- 1 : %d\n", pbudgetProposal->fValid && pbudgetProposal->nBlockStart <= nBlockStart);
+        printf("------- 2 : %d\n", pbudgetProposal->nBlockEnd >= nBlockEnd);
+        printf("------- 3 : %d\n", pbudgetProposal->GetYesCount() - pbudgetProposal->GetNoCount() > mnodeman.CountEnabled(MIN_BUDGET_PEER_PROTO_VERSION)/10);
+        printf("------- 4 : %d\n", pbudgetProposal->IsEstablished());
+
+        //prop start/end should be inside this period
+        if(pbudgetProposal->fValid && pbudgetProposal->nBlockStart <= nBlockStart &&
+                pbudgetProposal->nBlockEnd >= nBlockEnd &&
+                pbudgetProposal->GetYesCount() - pbudgetProposal->GetNoCount() > mnodeman.CountEnabled(MIN_BUDGET_PEER_PROTO_VERSION)/10 && 
+                pbudgetProposal->IsEstablished())
+        {
+            printf("------- In range \n");
+
+            if(pbudgetProposal->GetAmount() + nBudgetAllocated <= nTotalBudget) {
+                pbudgetProposal->SetAllotted(pbudgetProposal->GetAmount());
+                nBudgetAllocated += pbudgetProposal->GetAmount();
+                vBudgetProposalsRet.push_back(pbudgetProposal);
+                printf("------- YES \n");
+            } else {
+                pbudgetProposal->SetAllotted(0);
+            }
+        }
+
+        ++it2;
+    }
+
+    return vBudgetProposalsRet;
+}
+
+std::pair<std::string, std::string> CGovernanceManager::GetSettings()
+{
+    LOCK(cs);
+
+    // ------- Sort budgets by Yes Count
+
+    std::vector<std::pair<CGovernanceObject*, int> > vBudgetPorposalsSort;
+
+    std::map<uint256, CGovernanceObject>::iterator it = mapGovernanceObjects.begin();
+    while(it != mapGovernanceObjects.end()){
+        (*it).second.CleanAndRemove(false);
         vBudgetPorposalsSort.push_back(make_pair(&((*it).second), (*it).second.GetYesCount()-(*it).second.GetNoCount()));
         ++it;
     }

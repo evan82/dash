@@ -40,10 +40,10 @@ UniValue vote(const UniValue& params, bool fHelp)
                 "Vote on proposals, contracts, switches or settings\n"
                 "\nAvailable commands:\n"
                 "              - Prepare governance object by signing and creating tx\n"
-                "  get           - Show detailed votes list for governance object\n"
-                "  one           - Vote on a governance object by single masternode (using dash.conf setup)\n"
-                "  many          - Vote on a governance object by all masternodes (using masternode.conf setup)\n"
                 "  alias         - Vote on a governance object by alias\n"
+                "  get           - Show detailed votes list for governance object\n"
+                "  many          - Vote on a governance object by all masternodes (using masternode.conf setup)\n"
+                "  one           - Vote on a governance object by single masternode (using dash.conf setup)\n"
                 "  raw           - Submit raw governance object vote (used in trustless governance implementations)\n"
                 );
 
@@ -460,7 +460,8 @@ UniValue proposal(const UniValue& params, bool fHelp)
         //*************************************************************************
 
         // create transaction 15 minutes into the future, to allow for confirmation time
-        CGovernanceObjectBroadcast budgetProposalBroadcast(Proposal, strName, strURL, nPaymentCount, scriptPubKey, nAmount, nBlockStart, uint256());
+        CGovernanceObjectBroadcast budgetProposalBroadcast();
+        budgetProposalBroadcast Proposal, strName, strURL, nPaymentCount, scriptPubKey, nAmount, nBlockStart, uint256());
 
         std::string strError = "";
         if(!budgetProposalBroadcast.IsValid(pindex, strError, false))
@@ -523,7 +524,8 @@ UniValue proposal(const UniValue& params, bool fHelp)
         uint256 hash = ParseHashV(params[7], "Proposal hash");
 
         //create the proposal incase we're the first to make it
-        CGovernanceObjectBroadcast budgetProposalBroadcast(Proposal, strName, strURL, nPaymentCount, scriptPubKey, nAmount, nBlockStart, hash);
+        CGovernanceObjectBroadcast budgetProposalBroadcast();
+        budgetProposalBroadcast.CreateProposal(Proposal, strName, strURL, nPaymentCount, scriptPubKey, nAmount, nBlockStart, hash);
 
         std::string strError = "";
 
@@ -708,8 +710,8 @@ UniValue contract(const UniValue& params, bool fHelp)
         strCommand = params[0].get_str();
 
     if (fHelp  ||
-        (strCommand != "vote-many" && strCommand != "vote-alias" && strCommand != "prepare" && strCommand != "submit" &&
-         strCommand != "vote" && strCommand != "getvotes" && strCommand != "get" && strCommand != "gethash" && strCommand != "list"))
+        (strCommand != "prepare" && strCommand != "submit" &&
+         strCommand != "get" && strCommand != "gethash" && strCommand != "list"))
         throw runtime_error(
                 "contract \"command\"...\n"
                 "Manage contracts\n"
@@ -724,7 +726,7 @@ UniValue contract(const UniValue& params, bool fHelp)
     if(strCommand == "prepare")
     {
         if (params.size() != 7)
-            throw runtime_error("Correct usage is 'contract prepare <contract-name> <url> <payment-count> <block-start> <dash-address> <monthly-payment-dash>'");
+            throw runtime_error("Correct usage is 'contract prepare <contract-name> <url> <month-count> <block-start> <dash-address> <monthly-payment-dash>'");
 
         int nBlockMin = 0;
         LOCK(cs_main);
@@ -735,7 +737,7 @@ UniValue contract(const UniValue& params, bool fHelp)
 
         std::string strName = SanitizeString(params[1].get_str());
         std::string strURL = SanitizeString(params[2].get_str());
-        int nPaymentCount = params[3].get_int();
+        int nMonthCount = params[3].get_int();
         int nBlockStart = params[4].get_int();
 
         //set block min
@@ -755,21 +757,15 @@ UniValue contract(const UniValue& params, bool fHelp)
         //*************************************************************************
 
         // create transaction 15 minutes into the future, to allow for confirmation time
-        CGovernanceObjectBroadcast budgetProposalBroadcast(Contract, strName, strURL, nPaymentCount, scriptPubKey, nAmount, nBlockStart, uint256());
+        CGovernanceObjectBroadcast contract()
+        contract.CreateContract(strName, strURL, nMonthCount, scriptPubKey, nAmount, nBlockStart, uint256());
 
         std::string strError = "";
-        if(!budgetProposalBroadcast.IsValid(pindex, strError, false))
-            return "Contract is not valid - " + budgetProposalBroadcast.GetHash().ToString() + " - " + strError;
-
-        bool useIX = false; //true;
-        // if (params.size() > 7) {
-        //     if(params[7].get_str() != "false" && params[7].get_str() != "true")
-        //         return "Invalid use_ix, must be true or false";
-        //     useIX = params[7].get_str() == "true" ? true : false;
-        // }
+        if(!contract.IsValid(pindex, strError, false))
+            return "Contract is not valid - " + contract.GetHash().ToString() + " - " + strError;
 
         CWalletTx wtx;
-        if(!pwalletMain->GetBudgetSystemCollateralTX(wtx, budgetProposalBroadcast.GetHash(), useIX)){
+        if(!pwalletMain->GetBudgetSystemCollateralTX(wtx, contract.GetHash(), false)){
             return "Error making collateral transaction for proposal. Please check your wallet balance and make sure your wallet is unlocked.";
         }
 
@@ -818,24 +814,25 @@ UniValue contract(const UniValue& params, bool fHelp)
         uint256 hash = ParseHashV(params[7], "Contract hash");
 
         //create the contract incase we're the first to make it
-        CGovernanceObjectBroadcast budgetProposalBroadcast(Contract, strName, strURL, nPaymentCount, scriptPubKey, nAmount, nBlockStart, hash);
+        CGovernanceObjectBroadcast contractBroad();
+        contractBroad.Create(Proposal, strName, strURL, nPaymentCount, scriptPubKey, nAmount, nBlockStart, hash);
 
         std::string strError = "";
 
-        if(!budgetProposalBroadcast.IsValid(pindex, strError)){
-            return "Contract is not valid - " + budgetProposalBroadcast.GetHash().ToString() + " - " + strError;
+        if(!contractBroad.IsValid(pindex, strError)){
+            return "Contract is not valid - " + contractBroad.GetHash().ToString() + " - " + strError;
         }
 
         int nConf = 0;
-        if(!IsBudgetCollateralValid(hash, budgetProposalBroadcast.GetHash(), strError, budgetProposalBroadcast.nTime, nConf)){
+        if(!IsBudgetCollateralValid(hash, contractBroad.GetHash(), strError, contractBroad.nTime, nConf)){
             return "Contract FeeTX is not valid - " + hash.ToString() + " - " + strError;
         }
 
-        governance.mapSeenGovernanceObjects.insert(make_pair(budgetProposalBroadcast.GetHash(), budgetProposalBroadcast));
-        budgetProposalBroadcast.Relay();
-        governance.AddGovernanceObject(budgetProposalBroadcast);
+        governance.mapSeenGovernanceObjects.insert(make_pair(contractBroad.GetHash(), contractBroad));
+        contractBroad.Relay();
+        governance.AddGovernanceObject(contractBroad);
 
-        return budgetProposalBroadcast.GetHash().ToString();
+        return contractBroad.GetHash().ToString();
 
     }
 
@@ -978,6 +975,289 @@ UniValue contract(const UniValue& params, bool fHelp)
 
         return pbudgetProposal->GetHash().ToString();
     }
+
+    return NullUniValue;
+}
+
+UniValue settings(const UniValue& params, bool fHelp)
+{
+    string strCommand;
+    if (params.size() >= 1)
+        strCommand = params[0].get_str();
+
+    if (fHelp  ||
+        (strCommand != "prepare" && strCommand != "submit" &&
+         strCommand != "get" && strCommand != "gethash" && strCommand != "list"))
+        throw runtime_error(
+                "setting \"command\"...\n"
+                "Manage contracts\n"
+                "\nAvailable commands:\n"
+                "  prepare            - Prepare setting by signing and creating tx\n"
+                "  submit             - Submit setting to network\n"
+                "  list               - List all contracts\n"
+                "  get                - get setting\n"
+                "  gethash            - Get setting hash(es) by setting name\n"
+                "  show               - Show current setting values\n"
+                );
+
+    if(strCommand == "prepare")
+    {
+        if (params.size() != 7)
+            throw runtime_error("Correct usage is 'setting prepare <setting-name> <url> <month-count> <block-start> <dash-address> <monthly-payment-dash>'");
+
+        int nBlockMin = 0;
+        LOCK(cs_main);
+        CBlockIndex* pindex = chainActive.Tip();
+
+        std::vector<CMasternodeConfig::CMasternodeEntry> mnEntries;
+        mnEntries = masternodeConfig.getEntries();
+
+        std::string strName = SanitizeString(params[1].get_str());
+        std::string strURL = SanitizeString(params[2].get_str());
+        int nMonthCount = params[3].get_int();
+        int nBlockStart = params[4].get_int();
+
+        //set block min
+        if(pindex != NULL) nBlockMin = pindex->nHeight;
+
+        if(nBlockStart < nBlockMin)
+            return "Invalid block start, must be more than current height.";
+
+        CBitcoinAddress address(params[5].get_str());
+        if (!address.IsValid())
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Dash address");
+
+        // Parse Dash address
+        CScript scriptPubKey = GetScriptForDestination(address.Get());
+        CAmount nAmount = AmountFromValue(params[6]);
+
+        //*************************************************************************
+
+        // create transaction 15 minutes into the future, to allow for confirmation time
+        CGovernanceObjectBroadcast settingBroadcast;
+        settingBroadcast.CreateSetting(strName, strURL, nMonthCount, scriptPubKey, nAmount, nBlockStart, uint256());
+
+        std::string strError = "";
+        if(!settingBroadcast.IsValid(pindex, strError, false))
+            return "Switch is not valid - " + settingBroadcast.GetHash().ToString() + " - " + strError;
+
+        CWalletTx wtx;
+        if(!pwalletMain->GetBudgetSystemCollateralTX(wtx, settingBroadcast.GetHash(), false)){
+            return "Error making collateral transaction for proposal. Please check your wallet balance and make sure your wallet is unlocked.";
+        }
+
+        // make our change address
+        CReserveKey reservekey(pwalletMain);
+        //send the tx to the network
+        pwalletMain->CommitTransaction(wtx, reservekey, useIX ? NetMsgType::IX : NetMsgType::TX);
+
+        return wtx.GetHash().ToString();
+    }
+
+    if(strCommand == "submit")
+    {
+        if (params.size() != 8)
+            throw runtime_error("Correct usage is 'setting submit <setting-name> <url> <payment-count> <block-start> <dash-address> <monthly-payment-dash> <fee-tx>'");
+
+        if(!masternodeSync.IsBlockchainSynced()){
+            return "Must wait for client to sync with masternode network. Try again in a minute or so.";
+        }
+
+        int nBlockMin = 0;
+        LOCK(cs_main);
+        CBlockIndex* pindex = chainActive.Tip();
+
+        std::vector<CMasternodeConfig::CMasternodeEntry> mnEntries;
+        mnEntries = masternodeConfig.getEntries();
+
+        std::string strName = SanitizeString(params[1].get_str());
+        std::string strURL = SanitizeString(params[2].get_str());
+        int nPaymentCount = params[3].get_int();
+        int nBlockStart = params[4].get_int();
+
+        //set block min
+        if(pindex != NULL) nBlockMin = pindex->nHeight;
+
+        if(nBlockStart < nBlockMin)
+            return "Invalid payment count, must be more than current height.";
+
+        CBitcoinAddress address(params[5].get_str());
+        if (!address.IsValid())
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Dash address");
+
+        // Parse Dash address
+        CScript scriptPubKey = GetScriptForDestination(address.Get());
+        CAmount nAmount = AmountFromValue(params[6]);
+        uint256 hash = ParseHashV(params[7], "Switch hash");
+
+        //create the setting incase we're the first to make it
+        CGovernanceObjectBroadcast settingBroadcast;
+        settingBroadcast.CreateSetting(strName, strURL, nMonthCount, scriptPubKey, nAmount, nBlockStart, uint256());
+
+        std::string strError = "";
+
+        if(!settingBroadcast.IsValid(pindex, strError)){
+            return "Switch is not valid - " + settingBroadcast.GetHash().ToString() + " - " + strError;
+        }
+
+        int nConf = 0;
+        if(!IsBudgetCollateralValid(hash, settingBroadcast.GetHash(), strError, settingBroadcast.nTime, nConf)){
+            return "Switch FeeTX is not valid - " + hash.ToString() + " - " + strError;
+        }
+
+        governance.mapSeenGovernanceObjects.insert(make_pair(settingBroadcast.GetHash(), settingBroadcast));
+        settingBroadcast.Relay();
+        governance.AddGovernanceObject(settingBroadcast);
+
+        return settingBroadcast.GetHash().ToString();
+
+    }
+
+    if(strCommand == "list")
+    {
+        if (params.size() > 2)
+            throw runtime_error("Correct usage is 'proposal list [valid]'");
+
+        std::string strShow = "valid";
+        if (params.size() == 2) strShow = params[1].get_str();
+
+        CBlockIndex* pindex;
+        {
+            LOCK(cs_main);
+            pindex = chainActive.Tip();
+        }
+
+        UniValue resultObj(UniValue::VOBJ);
+        int64_t nTotalAllotted = 0;
+
+        std::vector<CGovernanceObject*> winningProps = governance.FindMatchingGovernanceObjects(Proposal);
+        BOOST_FOREACH(CGovernanceObject* pbudgetProposal, winningProps)
+        {
+            if(strShow == "valid" && !pbudgetProposal->fValid) continue;
+
+            nTotalAllotted += pbudgetProposal->GetAllotted();
+
+            CTxDestination address1;
+            ExtractDestination(pbudgetProposal->GetPayee(), address1);
+            CBitcoinAddress address2(address1);
+
+            UniValue bObj(UniValue::VOBJ);
+            bObj.push_back(Pair("Name",  pbudgetProposal->GetName()));
+            bObj.push_back(Pair("URL",  pbudgetProposal->GetURL()));
+            bObj.push_back(Pair("Hash",  pbudgetProposal->GetHash().ToString()));
+            bObj.push_back(Pair("FeeHash",  pbudgetProposal->nFeeTXHash.ToString()));
+            bObj.push_back(Pair("BlockStart",  (int64_t)pbudgetProposal->GetBlockStart()));
+            bObj.push_back(Pair("BlockEnd",    (int64_t)pbudgetProposal->GetBlockEnd()));
+            bObj.push_back(Pair("TotalPaymentCount",  (int64_t)pbudgetProposal->GetTotalPaymentCount()));
+            bObj.push_back(Pair("RemainingPaymentCount",  (int64_t)pbudgetProposal->GetRemainingPaymentCount(pindex->nHeight)));
+            bObj.push_back(Pair("PaymentAddress",   address2.ToString()));
+            bObj.push_back(Pair("Ratio",  pbudgetProposal->GetRatio()));
+            bObj.push_back(Pair("AbsoluteYesCount",  (int64_t)pbudgetProposal->GetYesCount()-(int64_t)pbudgetProposal->GetNoCount()));
+            bObj.push_back(Pair("YesCount",  (int64_t)pbudgetProposal->GetYesCount()));
+            bObj.push_back(Pair("NoCount",  (int64_t)pbudgetProposal->GetNoCount()));
+            bObj.push_back(Pair("AbstainCount",  (int64_t)pbudgetProposal->GetAbstainCount()));
+            bObj.push_back(Pair("TotalPayment",  ValueFromAmount(pbudgetProposal->GetAmount()*pbudgetProposal->GetTotalPaymentCount())));
+            bObj.push_back(Pair("MonthlyPayment",  ValueFromAmount(pbudgetProposal->GetAmount())));
+
+            bObj.push_back(Pair("IsEstablished",  pbudgetProposal->IsEstablished()));
+
+            std::string strError = "";
+            bObj.push_back(Pair("IsValid",  pbudgetProposal->IsValid(pindex, strError)));
+            bObj.push_back(Pair("IsValidReason",  strError.c_str()));
+            bObj.push_back(Pair("fValid",  pbudgetProposal->fValid));
+
+            resultObj.push_back(Pair(pbudgetProposal->GetName(), bObj));
+        }
+
+        return resultObj;
+    }
+
+    if(strCommand == "get")
+    {
+        if (params.size() != 2)
+            throw runtime_error("Correct usage is 'proposal get <proposal-hash>'");
+
+        uint256 hash = ParseHashV(params[1], "Proposal hash");
+
+        CGovernanceObject* pbudgetProposal = governance.FindGovernanceObject(hash);
+
+        if(pbudgetProposal == NULL) return "Unknown proposal";
+
+        CBlockIndex* pindex;
+        {
+            LOCK(cs_main);
+            pindex = chainActive.Tip();
+        }
+
+        CTxDestination address1;
+        ExtractDestination(pbudgetProposal->GetPayee(), address1);
+        CBitcoinAddress address2(address1);
+
+        LOCK(cs_main);
+        UniValue obj(UniValue::VOBJ);
+        obj.push_back(Pair("Name",  pbudgetProposal->GetName()));
+        obj.push_back(Pair("Hash",  pbudgetProposal->GetHash().ToString()));
+        obj.push_back(Pair("FeeHash",  pbudgetProposal->nFeeTXHash.ToString()));
+        obj.push_back(Pair("URL",  pbudgetProposal->GetURL()));
+        obj.push_back(Pair("BlockStart",  (int64_t)pbudgetProposal->GetBlockStart()));
+        obj.push_back(Pair("BlockEnd",    (int64_t)pbudgetProposal->GetBlockEnd()));
+        obj.push_back(Pair("TotalPaymentCount",  (int64_t)pbudgetProposal->GetTotalPaymentCount()));
+        obj.push_back(Pair("RemainingPaymentCount",  (int64_t)pbudgetProposal->GetRemainingPaymentCount(pindex->nHeight)));
+        obj.push_back(Pair("PaymentAddress",   address2.ToString()));
+        obj.push_back(Pair("Ratio",  pbudgetProposal->GetRatio()));
+        obj.push_back(Pair("AbsoluteYesCount",  (int64_t)pbudgetProposal->GetYesCount()-(int64_t)pbudgetProposal->GetNoCount()));
+        obj.push_back(Pair("YesCount",  (int64_t)pbudgetProposal->GetYesCount()));
+        obj.push_back(Pair("NoCount",  (int64_t)pbudgetProposal->GetNoCount()));
+        obj.push_back(Pair("AbstainCount",  (int64_t)pbudgetProposal->GetAbstainCount()));
+        obj.push_back(Pair("TotalPayment",  ValueFromAmount(pbudgetProposal->GetAmount()*pbudgetProposal->GetTotalPaymentCount())));
+        obj.push_back(Pair("MonthlyPayment",  ValueFromAmount(pbudgetProposal->GetAmount())));
+        
+        obj.push_back(Pair("IsEstablished",  pbudgetProposal->IsEstablished()));
+
+        std::string strError = "";
+        obj.push_back(Pair("IsValid",  pbudgetProposal->IsValid(chainActive.Tip(), strError)));
+        obj.push_back(Pair("fValid",  pbudgetProposal->fValid));
+
+        return obj;
+    }
+
+
+    if(strCommand == "gethash")
+    {
+        if (params.size() != 2)
+            throw runtime_error("Correct usage is 'proposal gethash <proposal-name>'");
+
+        std::string strName = SanitizeString(params[1].get_str());
+
+        CGovernanceObject* pbudgetProposal = governance.FindGovernanceObject(strName);
+
+        if(pbudgetProposal == NULL) return "Unknown proposal";
+
+        UniValue resultObj(UniValue::VOBJ);
+
+        std::vector<CGovernanceObject*> winningProps = governance.FindMatchingGovernanceObjects(Proposal);
+        BOOST_FOREACH(CGovernanceObject* pbudgetProposal, winningProps)
+        {
+            if(pbudgetProposal->GetName() != strName) continue;
+            if(!pbudgetProposal->fValid) continue;
+
+            CTxDestination address1;
+            ExtractDestination(pbudgetProposal->GetPayee(), address1);
+            CBitcoinAddress address2(address1);
+
+            resultObj.push_back(Pair(pbudgetProposal->GetHash().ToString(), pbudgetProposal->GetHash().ToString()));
+        }
+
+        if(resultObj.size() > 1) return resultObj;
+
+        return pbudgetProposal->GetHash().ToString();
+    }
+
+    if(strCommand == "show")
+    {
+
+    }
+
 
     return NullUniValue;
 }
@@ -1172,12 +1452,9 @@ UniValue superblock(const UniValue& params, bool fHelp)
         (strCommand != "vote-many" && strCommand != "vote" && strCommand != "show" && strCommand != "getvotes" && strCommand != "prepare" && strCommand != "submit"))
         throw runtime_error(
                 "superblock \"command\"...\n"
-                "Manage current budgets\n"
+                "Get information about the next superblocks\n"
                 "\nAvailable commands:\n"
-                "  next        - Get info about next superblock for budget system\n"
-                "  nextsize    - Get superblock size for a given blockheight\n"
-                
-                "  get         - Show existing finalized budgets\n"
+                "  info   - Get info about the next superblock\n"
                 "  getvotes    - Get vote information for each finalized budget\n"
                 "  prepare     - Manually prepare a finalized budget\n"
                 "  submit      - Manually submit a finalized budget\n"
