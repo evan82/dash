@@ -256,8 +256,7 @@ extern UniValue spork(const UniValue& params, bool fHelp); //deprecated
 extern UniValue proposal(const UniValue& params, bool fHelp);
 extern UniValue contract(const UniValue& params, bool fHelp);
 extern UniValue budget(const UniValue& params, bool fHelp); //shows proposals and contracts
-//extern UniValue switch(const UniValue& params, bool fHelp);
-//extern UniValue setting(const UniValue& params, bool fHelp);
+extern UniValue setting(const UniValue& params, bool fHelp);
 extern UniValue vote(const UniValue& params, bool fHelp); //vote on any governance object
 extern UniValue superblock(const UniValue& params, bool fHelp); //show superblock data
 

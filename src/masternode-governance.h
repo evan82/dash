@@ -34,25 +34,22 @@ class CTxBudgetPayment;
 static const CAmount BUDGET_FEE_TX = (5*COIN);
 static const int64_t BUDGET_FEE_CONFIRMATIONS = 6;
 static const int64_t BUDGET_VOTE_UPDATE_MIN = 60*60;
+static const int64_t CONTRACT_ACTIVATION_TIME = 60*60*24*14;
 
 extern std::vector<CGovernanceObjectBroadcast> vecImmatureBudgetProposals;
 extern std::vector<CFinalizedBudgetBroadcast> vecImmatureFinalizedBudgets;
 
 
-/*
-    These are the possible governance objects.
-    
-    Voting Mechanism
+/* 
+    Voting Mechanism:
+        CGovernanceVote: Votes for
+            Proposal, Contract, FinalizedBudget
 
-    CGovernanceVote
-        Proposal, Contract, Setting, Switch, FinalizedBudget
-
-    Object Classes
-
-    CGovernanceObject
-        Proposal, Contract, Setting, Switch
-    CFinalizedBudget
-        FinalizedBudget
+    Object Classes:
+        CGovernanceObject
+            Proposal, Contract
+        CFinalizedBudget
+            FinalizedBudget
 */
 
 enum GovernanceObjectType {
@@ -60,9 +57,8 @@ enum GovernanceObjectType {
     None,
     Proposal,
     Contract,
-    Setting,
-    Switch,
-    FinalizedBudget = 88
+    FinalizedBudget,
+    AllTypes = 999 //used for filtering
 };
 
 extern CGovernanceManager governance;
@@ -151,15 +147,25 @@ public:
     void ResetSync();
     void MarkSynced();
 
-    // **** Statistics / Information ****
+    // **** Search / Statistics / Information ****
 
     int CountProposalInventoryItems() { return mapSeenGovernanceObjects.size() + mapSeenGovernanceVotes.size(); }
     int CountFinalizedInventoryItems() { return mapSeenFinalizedBudgets.size(); }
 
+    CGovernanceObject *FindGovernanceObject(const std::string &strName);
+    CGovernanceObject *FindGovernanceObject(uint256 nHash);
+    CFinalizedBudget *FindFinalizedBudget(uint256 nHash);
+    GovernanceObjectType GetGovernanceTypeByHash(uint256 nHash);
+    std::vector<CGovernanceObject*> GetBudget();
     CAmount GetTotalBudget(int nHeight);
-    bool IsBudgetPaymentBlock(int nBlockHeight);
     bool HasNextFinalizedBudget(); // Do we have the next finalized budget?
+    bool IsBudgetPaymentBlock(int nBlockHeight);
     bool IsTransactionValid(const CTransaction& txNew, int nBlockHeight);
+    
+    std::vector<CGovernanceObject*> FindMatchingGovernanceObjects(GovernanceObjectType type);
+    std::vector<CFinalizedBudget*> GetFinalizedBudgets();
+    std::string GetRequiredPaymentsString(int nBlockHeight);
+
     std::string ToString() const;
 
     // **** Update ****
@@ -175,19 +181,6 @@ public:
     void ProcessMessage(CNode* pfrom, std::string& strCommand, CDataStream& vRecv);
     void UpdatedBlockTip(const CBlockIndex *pindex);
     bool UpdateGovernanceObjectVotes(CGovernanceVote& vote, CNode* pfrom, std::string& strError);
-
-    // **** Search ****
-
-    CGovernanceObject *FindGovernanceObject(const std::string &strName);
-    CGovernanceObject *FindGovernanceObject(uint256 nHash);
-    CFinalizedBudget *FindFinalizedBudget(uint256 nHash);
-    GovernanceObjectType GetGovernanceTypeByHash(uint256 nHash);
-    std::vector<CGovernanceObject*> GetBudget();
-    std::map<std::string, std::string> GetSettings();
-    
-    std::vector<CGovernanceObject*> FindMatchingGovernanceObjects(GovernanceObjectType type);
-    std::vector<CFinalizedBudget*> GetFinalizedBudgets();
-    std::string GetRequiredPaymentsString(int nBlockHeight);
 
     // **** Serializer ****
 
@@ -206,175 +199,6 @@ public:
 
 };
 
-
-class CTxBudgetPayment
-{
-public:
-    uint256 nProposalHash;
-    CScript payee;
-    CAmount nAmount;
-
-    CTxBudgetPayment() {
-        payee = CScript();
-        nAmount = 0;
-        nProposalHash = uint256();
-    }
-
-    ADD_SERIALIZE_METHODS;
-
-    //for saving to the serialized db
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        READWRITE(*(CScriptBase*)(&payee));
-        READWRITE(nAmount);
-        READWRITE(nProposalHash);
-    }
-};
-
-//
-// Finalized Budget : Contains the suggested proposals to pay on a given block
-//
-
-class CFinalizedBudget
-{   // **** Objects and memory ****
-
-private:
-    // critical section to protect the inner data structures
-    mutable CCriticalSection cs;
-    bool fAutoChecked; //If it matches what we see, we'll auto vote for it (masternode only)
-
-public:
-    bool fValid;
-    std::string strBudgetName;
-    int nBlockStart;
-    std::vector<CTxBudgetPayment> vecBudgetPayments;
-    map<uint256, CGovernanceVote> mapVotes;
-    uint256 nFeeTXHash;
-    int64_t nTime;
-
-    // **** Initialization ****
- 
-    CFinalizedBudget();
-    CFinalizedBudget(const CFinalizedBudget& other);
- 
-    // **** Update ****
-
-    bool AddOrUpdateVote(CGovernanceVote& vote, std::string& strError);
-    void AutoCheckSuperBlockVoting(); //check to see if we should vote on new superblock proposals
-    void CleanAndRemove(bool fSignatureCheck); 
-    void SubmitVote(); //vote on this finalized budget as a masternode
-
-    // **** Statistics / Information ****
-    int GetBlockStart() {return nBlockStart;}
-    int GetBlockEnd() {return nBlockStart + (int)(vecBudgetPayments.size() - 1);}
-    bool GetBudgetPaymentByBlock(int64_t nBlockHeight, CTxBudgetPayment& payment)
-    {
-        LOCK(cs);
-
-        int i = nBlockHeight - GetBlockStart();
-        if(i < 0) return false;
-        if(i > (int)vecBudgetPayments.size() - 1) return false;
-        payment = vecBudgetPayments[i];
-        return true;
-    }
-
-    uint256 GetHash(){
-        CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
-        ss << strBudgetName;
-        ss << nBlockStart;
-        ss << vecBudgetPayments;
-
-        uint256 h1 = ss.GetHash();
-        return h1;
-    }
-
-    std::string GetName() {return strBudgetName; }
-    bool GetPayeeAndAmount(int64_t nBlockHeight, CScript& payee, CAmount& nAmount)
-    {
-        LOCK(cs);
-
-        int i = nBlockHeight - GetBlockStart();
-        if(i < 0) return false;
-        if(i > (int)vecBudgetPayments.size() - 1) return false;
-        payee = vecBudgetPayments[i].payee;
-        nAmount = vecBudgetPayments[i].nAmount;
-        return true;
-    }
-    std::string GetProposals();
-    double GetScore();
-    string GetStatus();
-    CAmount GetTotalPayout(); //total dash paid out by this budget
-    int64_t GetValidEndTimestamp() {return 0;}
-    int64_t GetValidStartTimestamp() {return 32503680000;}
-    int GetVoteCount() {return (int)mapVotes.size();}
-
-    bool HasMinimumRequiredSupport();
-    bool IsValid(const CBlockIndex* pindex, std::string& strError, bool fCheckCollateral=true);
-    bool IsTransactionValid(const CTransaction& txNew, int nBlockHeight);
-    
-    // **** Serializer ****
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        // TODO: Do we need names for these? I don't think so
-        READWRITE(LIMITED_STRING(strBudgetName, 20));
-        READWRITE(nFeeTXHash);
-        READWRITE(nTime);
-        READWRITE(nBlockStart);
-        READWRITE(vecBudgetPayments);
-        READWRITE(fAutoChecked);
-
-        READWRITE(mapVotes);
-    }
-};
- 
-// FinalizedBudget are cast then sent to peers with this object, which leaves the votes out
-class CFinalizedBudgetBroadcast : public CFinalizedBudget
-{
-private:
-    std::vector<unsigned char> vchSig;
-
-public:
-    CFinalizedBudgetBroadcast();
-    CFinalizedBudgetBroadcast(const CFinalizedBudget& other);
-    CFinalizedBudgetBroadcast(std::string strBudgetNameIn, int nBlockStartIn, std::vector<CTxBudgetPayment> vecBudgetPaymentsIn, uint256 nFeeTXHashIn);
-
-    void swap(CFinalizedBudgetBroadcast& first, CFinalizedBudgetBroadcast& second) // nothrow
-    {
-        // enable ADL (not necessary in our case, but good practice)
-        using std::swap;
-
-        // by swapping the members of two classes,
-        // the two classes are effectively swapped
-        swap(first.strBudgetName, second.strBudgetName);
-        swap(first.nBlockStart, second.nBlockStart);
-        first.mapVotes.swap(second.mapVotes);
-        first.vecBudgetPayments.swap(second.vecBudgetPayments);
-        swap(first.nFeeTXHash, second.nFeeTXHash);
-        swap(first.nTime, second.nTime);
-    }
-
-    CFinalizedBudgetBroadcast& operator=(CFinalizedBudgetBroadcast from)
-    {
-        swap(*this, from);
-        return *this;
-    }
-
-    void Relay();
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        READWRITE(LIMITED_STRING(strBudgetName, 20));
-        READWRITE(nBlockStart);
-        READWRITE(vecBudgetPayments);
-        READWRITE(nFeeTXHash);
-    }
-};
-
 std::string GovernanceTypeToString(GovernanceObjectType type) {
     std::string s = "";
     if(type == Error) s = "Error";
@@ -383,12 +207,13 @@ std::string GovernanceTypeToString(GovernanceObjectType type) {
     if(type == Setting) s = "Setting";
     if(type == Switch) s = "Switch";
     if(type == FinalizedBudget) s = "FinalizedBudget";
+    if(type == AllTypes) s = "AllTypes";
     return s;
 };
 
 //
 // Governance Object (Base) : Contains the masternode votes for each budget
-//      This could be a Proposal, Contract, Setting or Switch
+//      This could be a Proposal or Contract
 //
 
 class CGovernanceObject
@@ -412,15 +237,11 @@ public:
     int64_t nTime;
     uint256 nFeeTXHash;
 
-    // proposals and contracts
     std::string strURL;
     int nBlockStart;
     int nBlockEnd;
     CAmount nAmount;
     CScript address;
-
-    //settings
-    std::string strSuggestedValue;
 
     map<uint256, CGovernanceVote> mapVotes;
 
@@ -452,10 +273,16 @@ public:
     int GetBlockStartCycle();
     
     GovernanceObjectType GetGovernanceType();
+    std::string GetGovernanceTypeAsString();
 
     // for values
     std::string GetSuggestedValueAsString(){return strSuggestedValue;}
     int GetSuggestedValueAsInt(){return boost::lexical_cast<int>(strSuggestedValue);}
+
+    // for contracts (should we subclass a contract object??)
+    int64_t GetContractActivationTime()
+    bool IsContractActivated();
+
 
     uint256 GetHash(){
         CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
@@ -465,7 +292,7 @@ public:
         ss << nBlockEnd;
         ss << nAmount;
         ss << *(CScriptBase*)(&address);
-        //ss << nGovernanceType
+        ss << nGovernanceType;
         uint256 h1 = ss.GetHash();
 
         return h1;
@@ -492,7 +319,9 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        //for syncing with other clients
+        // TODO : For testnet version bump
+        READWRITE(nGovernanceType);
+
         READWRITE(LIMITED_STRING(strName, 20));
         READWRITE(LIMITED_STRING(strURL, 64));
         READWRITE(nBlockStart);
@@ -505,12 +334,6 @@ public:
 
         //for saving to the serialized db
         READWRITE(mapVotes);
-
-        // TODO : For testnet version bump
-        //READWRITE(nGovernanceType);
-
-        // reverse compatabiity until we are in testnet
-        nGovernanceType = Proposal;
     }
 };
 
@@ -559,7 +382,8 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        //for syncing with other clients
+        // TODO : For testnet version bump
+        READWRITE(nGovernanceType);
 
         READWRITE(LIMITED_STRING(strName, 20));
         READWRITE(LIMITED_STRING(strURL, 64));
@@ -569,12 +393,6 @@ public:
         READWRITE(nAmount);
         READWRITE(*(CScriptBase*)(&address));
         READWRITE(nFeeTXHash);
-        
-        // TODO : For testnet version bump
-        //READWRITE(nGovernanceType);
-
-        // reverse compatabiity until we are in testnet
-        nGovernanceType = Proposal;
     }
 };
 
@@ -647,7 +465,7 @@ public:
         ss << nParentHash;
         ss << nVote;
         ss << nTime;
-        //ss << nGovernanceType
+        ss << nGovernanceType;
         return ss.GetHash();
     }
 
@@ -666,14 +484,178 @@ public:
         READWRITE(vchSig);
 
         // TODO : For testnet version bump
-        //READWRITE(nGovernanceType);
-
-        // reverse compatabiity until we are in testnet
-        nGovernanceType = Proposal;
+        READWRITE(nGovernanceType);
     }
 
-
-
 };
+
+class CTxBudgetPayment
+{
+public:
+    uint256 nProposalHash;
+    CScript payee;
+    CAmount nAmount;
+
+    CTxBudgetPayment() {
+        payee = CScript();
+        nAmount = 0;
+        nProposalHash = uint256();
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    //for saving to the serialized db
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+        READWRITE(*(CScriptBase*)(&payee));
+        READWRITE(nAmount);
+        READWRITE(nProposalHash);
+    }
+};
+
+//
+// Finalized Budget : Contains the suggested proposals to pay on a given block
+//
+
+class CFinalizedBudget
+{   // **** Objects and memory ****
+
+private:
+    // critical section to protect the inner data structures
+    mutable CCriticalSection cs;
+    bool fAutoChecked; //If it matches what we see, we'll auto vote for it (masternode only)
+
+public:
+    bool fValid;
+    std::string strBudgetName;
+    int nBlockStart;
+    std::vector<CTxBudgetPayment> vecBudgetPayments;
+    map<uint256, CGovernanceVote> mapVotes;
+    uint256 nFeeTXHash;
+    int64_t nTime;
+
+    // **** Initialization ****
+
+    CFinalizedBudget();
+    CFinalizedBudget(const CFinalizedBudget& other);
+
+    // **** Update ****
+
+    bool AddOrUpdateVote(CGovernanceVote& vote, std::string& strError);
+    void AutoCheckSuperBlockVoting(); //check to see if we should vote on new superblock proposals
+    void CleanAndRemove(bool fSignatureCheck);
+    void SubmitVote(); //vote on this finalized budget as a masternode
+
+    // **** Statistics / Information ****
+    int GetBlockStart() {return nBlockStart;}
+    int GetBlockEnd() {return nBlockStart + (int)(vecBudgetPayments.size() - 1);}
+    bool GetBudgetPaymentByBlock(int64_t nBlockHeight, CTxBudgetPayment& payment)
+    {
+        LOCK(cs);
+
+        int i = nBlockHeight - GetBlockStart();
+        if(i < 0) return false;
+        if(i > (int)vecBudgetPayments.size() - 1) return false;
+        payment = vecBudgetPayments[i];
+        return true;
+    }
+
+    uint256 GetHash(){
+        CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
+        ss << strBudgetName;
+        ss << nBlockStart;
+        ss << vecBudgetPayments;
+
+        uint256 h1 = ss.GetHash();
+        return h1;
+    }
+
+    std::string GetName() {return strBudgetName; }
+    bool GetPayeeAndAmount(int64_t nBlockHeight, CScript& payee, CAmount& nAmount)
+    {
+        LOCK(cs);
+
+        int i = nBlockHeight - GetBlockStart();
+        if(i < 0) return false;
+        if(i > (int)vecBudgetPayments.size() - 1) return false;
+        payee = vecBudgetPayments[i].payee;
+        nAmount = vecBudgetPayments[i].nAmount;
+        return true;
+    }
+    std::string GetProposals();
+    double GetScore();
+    string GetStatus();
+    CAmount GetTotalPayout(); //total dash paid out by this budget
+    int64_t GetValidEndTimestamp() {return 0;}
+    int64_t GetValidStartTimestamp() {return 32503680000;}
+    int GetVoteCount() {return (int)mapVotes.size();}
+
+    bool HasMinimumRequiredSupport();
+    bool IsValid(const CBlockIndex* pindex, std::string& strError, bool fCheckCollateral=true);
+    bool IsTransactionValid(const CTransaction& txNew, int nBlockHeight);
+
+    // **** Serializer ****
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+        // TODO: Do we need names for these? I don't think so
+        READWRITE(LIMITED_STRING(strBudgetName, 20));
+        READWRITE(nFeeTXHash);
+        READWRITE(nTime);
+        READWRITE(nBlockStart);
+        READWRITE(vecBudgetPayments);
+        READWRITE(fAutoChecked);
+
+        READWRITE(mapVotes);
+    }
+};
+
+// FinalizedBudget are cast then sent to peers with this object, which leaves the votes out
+class CFinalizedBudgetBroadcast : public CFinalizedBudget
+{
+private:
+    std::vector<unsigned char> vchSig;
+
+public:
+    CFinalizedBudgetBroadcast();
+    CFinalizedBudgetBroadcast(const CFinalizedBudget& other);
+    CFinalizedBudgetBroadcast(std::string strBudgetNameIn, int nBlockStartIn, std::vector<CTxBudgetPayment> vecBudgetPaymentsIn, uint256 nFeeTXHashIn);
+
+    void swap(CFinalizedBudgetBroadcast& first, CFinalizedBudgetBroadcast& second) // nothrow
+    {
+        // enable ADL (not necessary in our case, but good practice)
+        using std::swap;
+
+        // by swapping the members of two classes,
+        // the two classes are effectively swapped
+        swap(first.strBudgetName, second.strBudgetName);
+        swap(first.nBlockStart, second.nBlockStart);
+        first.mapVotes.swap(second.mapVotes);
+        first.vecBudgetPayments.swap(second.vecBudgetPayments);
+        swap(first.nFeeTXHash, second.nFeeTXHash);
+        swap(first.nTime, second.nTime);
+    }
+
+    CFinalizedBudgetBroadcast& operator=(CFinalizedBudgetBroadcast from)
+    {
+        swap(*this, from);
+        return *this;
+    }
+
+    void Relay();
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+        READWRITE(LIMITED_STRING(strBudgetName, 20));
+        READWRITE(nBlockStart);
+        READWRITE(vecBudgetPayments);
+        READWRITE(nFeeTXHash);
+    }
+};
+
 
 #endif

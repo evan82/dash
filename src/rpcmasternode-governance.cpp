@@ -38,7 +38,7 @@ UniValue vote(const UniValue& params, bool fHelp)
                 "  alias         - Vote on a governance object by alias\n"
                 "  get           - Show detailed votes list for governance object\n"
                 "  many          - Vote on a governance object by all masternodes (using masternode.conf setup)\n"
-                "  one           - Vote on a governance object by single masternode (using dash.conf setup)\n"
+                "  once          - Vote on a governance object by single masternode (using dash.conf setup)\n"
                 "  raw           - Submit raw governance object vote (used in trustless governance implementations)\n"
                 );
 
@@ -101,10 +101,11 @@ UniValue vote(const UniValue& params, bool fHelp)
 
         return obj;
     }
-    if(strCommand == "one")
+
+    if(strCommand == "once")
     {
         if (params.size() != 3)
-            throw runtime_error("Correct usage is 'proposal vote <proposal-hash> <yes|no>'");
+            throw runtime_error("Correct usage is 'vote once <proposal-hash> <yes|no>'");
 
         uint256 hash = ParseHashV(params[1], "Proposal hash");
         std::string strVote = params[2].get_str();
@@ -418,7 +419,7 @@ UniValue proposal(const UniValue& params, bool fHelp)
                 "\nAvailable commands:\n"
                 "  prepare            - Prepare proposal by signing and creating tx\n"
                 "  submit             - Submit proposal to network\n"
-                "  list               - List all proposals - (list valid|all|extended)\n"
+                "  list               - List all proposals - (list valid|all|extended|active)\n"
                 "  get                - get proposal\n"
                 "  gethash            - Get proposal hash(es) by proposal name\n"
                 );
@@ -976,265 +977,14 @@ UniValue contract(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
-UniValue settings(const UniValue& params, bool fHelp)
-{
-    string strCommand;
-    if (params.size() >= 1)
-        strCommand = params[0].get_str();
-
-    if (fHelp  ||
-        (strCommand != "prepare" && strCommand != "submit" &&
-         strCommand != "get" && strCommand != "gethash" && strCommand != "list"))
-        throw runtime_error(
-                "setting \"command\"...\n"
-                "Manage contracts\n"
-                "\nAvailable commands:\n"
-                "  prepare            - Prepare setting by signing and creating tx\n"
-                "  submit             - Submit setting to network\n"
-                "  list               - List all contracts\n"
-                "  get                - get setting\n"
-                "  gethash            - Get setting hash(es) by setting name\n"
-                "  show               - Show current setting values\n"
-                );
-
-    if(strCommand == "prepare")
-    {
-        if (params.size() != 7)
-            throw runtime_error("Correct usage is 'setting prepare <setting-name> <url> <suggested-value>'");
-
-        int nBlockMin = 0;
-        LOCK(cs_main);
-        CBlockIndex* pindex = chainActive.Tip();
-
-        std::vector<CMasternodeConfig::CMasternodeEntry> mnEntries;
-        mnEntries = masternodeConfig.getEntries();
-
-        std::string strName = SanitizeString(params[1].get_str());
-        std::string strURL = SanitizeString(params[2].get_str());
-        std::string strSuggestedValue = SanitizeString(params[3].get_str());
-
-        //*************************************************************************
-
-        // create transaction 15 minutes into the future, to allow for confirmation time
-        CGovernanceObjectBroadcast settingBroadcast;
-        settingBroadcast.CreateSetting(strName, strURL, strSuggestedValue, uint256());
-
-        std::string strError = "";
-        if(!settingBroadcast.IsValid(pindex, strError, false))
-            return "Switch is not valid - " + settingBroadcast.GetHash().ToString() + " - " + strError;
-
-        CWalletTx wtx;
-        if(!pwalletMain->GetBudgetSystemCollateralTX(wtx, settingBroadcast.GetHash(), false)){
-            return "Error making collateral transaction for proposal. Please check your wallet balance and make sure your wallet is unlocked.";
-        }
-
-        // make our change address
-        CReserveKey reservekey(pwalletMain);
-        //send the tx to the network
-        pwalletMain->CommitTransaction(wtx, reservekey, NetMsgType::TX);
-
-        return wtx.GetHash().ToString();
-    }
-
-    if(strCommand == "submit")
-    {
-        if (params.size() != 7)
-            throw runtime_error("Correct usage is 'setting prepare <setting-name> <url> <suggested-value> <colateral-hash>'");
-
-        if(!masternodeSync.IsBlockchainSynced()){
-            return "Must wait for client to sync with masternode network. Try again in a minute or so.";
-        }
-
-        int nBlockMin = 0;
-        LOCK(cs_main);
-        CBlockIndex* pindex = chainActive.Tip();
-
-        std::vector<CMasternodeConfig::CMasternodeEntry> mnEntries;
-        mnEntries = masternodeConfig.getEntries();
-
-        std::string strName = SanitizeString(params[1].get_str());
-        std::string strURL = SanitizeString(params[2].get_str());
-        std::string strSuggestedValue = SanitizeString(params[3].get_str());
-
-        uint256 hash = ParseHashV(params[7], "Switch hash");
-
-        //create the setting incase we're the first to make it
-        CGovernanceObjectBroadcast settingBroadcast;
-        settingBroadcast.CreateSetting(strName, strURL, strSuggestedValue, uint256());
-
-        std::string strError = "";
-
-        if(!settingBroadcast.IsValid(pindex, strError)){
-            return "Switch is not valid - " + settingBroadcast.GetHash().ToString() + " - " + strError;
-        }
-
-        int nConf = 0;
-        if(!IsBudgetCollateralValid(hash, settingBroadcast.GetHash(), strError, settingBroadcast.nTime, nConf)){
-            return "Switch FeeTX is not valid - " + hash.ToString() + " - " + strError;
-        }
-
-        governance.mapSeenGovernanceObjects.insert(make_pair(settingBroadcast.GetHash(), settingBroadcast));
-        settingBroadcast.Relay();
-        governance.AddGovernanceObject(settingBroadcast);
-
-        return settingBroadcast.GetHash().ToString();
-
-    }
-
-    if(strCommand == "list")
-    {
-        if (params.size() > 2)
-            throw runtime_error("Correct usage is 'proposal list [valid]'");
-
-        std::string strShow = "valid";
-        if (params.size() == 2) strShow = params[1].get_str();
-
-        CBlockIndex* pindex;
-        {
-            LOCK(cs_main);
-            pindex = chainActive.Tip();
-        }
-
-        UniValue resultObj(UniValue::VOBJ);
-        int64_t nTotalAllotted = 0;
-
-        std::vector<CGovernanceObject*> winningProps = governance.FindMatchingGovernanceObjects(Proposal);
-        BOOST_FOREACH(CGovernanceObject* pbudgetProposal, winningProps)
-        {
-            if(strShow == "valid" && !pbudgetProposal->fValid) continue;
-
-            nTotalAllotted += pbudgetProposal->GetAllotted();
-
-            CTxDestination address1;
-            ExtractDestination(pbudgetProposal->GetPayee(), address1);
-            CBitcoinAddress address2(address1);
-
-            UniValue bObj(UniValue::VOBJ);
-            bObj.push_back(Pair("Name",  pbudgetProposal->GetName()));
-            bObj.push_back(Pair("URL",  pbudgetProposal->GetURL()));
-            bObj.push_back(Pair("Hash",  pbudgetProposal->GetHash().ToString()));
-            bObj.push_back(Pair("FeeHash",  pbudgetProposal->nFeeTXHash.ToString()));
-            bObj.push_back(Pair("BlockStart",  (int64_t)pbudgetProposal->GetBlockStart()));
-            bObj.push_back(Pair("BlockEnd",    (int64_t)pbudgetProposal->GetBlockEnd()));
-            bObj.push_back(Pair("TotalPaymentCount",  (int64_t)pbudgetProposal->GetTotalPaymentCount()));
-            bObj.push_back(Pair("RemainingPaymentCount",  (int64_t)pbudgetProposal->GetRemainingPaymentCount(pindex->nHeight)));
-            bObj.push_back(Pair("PaymentAddress",   address2.ToString()));
-            bObj.push_back(Pair("Ratio",  pbudgetProposal->GetRatio()));
-            bObj.push_back(Pair("AbsoluteYesCount",  (int64_t)pbudgetProposal->GetYesCount()-(int64_t)pbudgetProposal->GetNoCount()));
-            bObj.push_back(Pair("YesCount",  (int64_t)pbudgetProposal->GetYesCount()));
-            bObj.push_back(Pair("NoCount",  (int64_t)pbudgetProposal->GetNoCount()));
-            bObj.push_back(Pair("AbstainCount",  (int64_t)pbudgetProposal->GetAbstainCount()));
-            bObj.push_back(Pair("TotalPayment",  ValueFromAmount(pbudgetProposal->GetAmount()*pbudgetProposal->GetTotalPaymentCount())));
-            bObj.push_back(Pair("MonthlyPayment",  ValueFromAmount(pbudgetProposal->GetAmount())));
-
-            bObj.push_back(Pair("IsEstablished",  pbudgetProposal->IsEstablished()));
-
-            std::string strError = "";
-            bObj.push_back(Pair("IsValid",  pbudgetProposal->IsValid(pindex, strError)));
-            bObj.push_back(Pair("IsValidReason",  strError.c_str()));
-            bObj.push_back(Pair("fValid",  pbudgetProposal->fValid));
-
-            resultObj.push_back(Pair(pbudgetProposal->GetName(), bObj));
-        }
-
-        return resultObj;
-    }
-
-    if(strCommand == "get")
-    {
-        if (params.size() != 2)
-            throw runtime_error("Correct usage is 'proposal get <proposal-hash>'");
-
-        uint256 hash = ParseHashV(params[1], "Proposal hash");
-
-        CGovernanceObject* pbudgetProposal = governance.FindGovernanceObject(hash);
-
-        if(pbudgetProposal == NULL) return "Unknown proposal";
-
-        CBlockIndex* pindex;
-        {
-            LOCK(cs_main);
-            pindex = chainActive.Tip();
-        }
-
-        CTxDestination address1;
-        ExtractDestination(pbudgetProposal->GetPayee(), address1);
-        CBitcoinAddress address2(address1);
-
-        LOCK(cs_main);
-        UniValue obj(UniValue::VOBJ);
-        obj.push_back(Pair("Name",  pbudgetProposal->GetName()));
-        obj.push_back(Pair("Hash",  pbudgetProposal->GetHash().ToString()));
-        obj.push_back(Pair("FeeHash",  pbudgetProposal->nFeeTXHash.ToString()));
-        obj.push_back(Pair("URL",  pbudgetProposal->GetURL()));
-        obj.push_back(Pair("BlockStart",  (int64_t)pbudgetProposal->GetBlockStart()));
-        obj.push_back(Pair("BlockEnd",    (int64_t)pbudgetProposal->GetBlockEnd()));
-        obj.push_back(Pair("TotalPaymentCount",  (int64_t)pbudgetProposal->GetTotalPaymentCount()));
-        obj.push_back(Pair("RemainingPaymentCount",  (int64_t)pbudgetProposal->GetRemainingPaymentCount(pindex->nHeight)));
-        obj.push_back(Pair("PaymentAddress",   address2.ToString()));
-        obj.push_back(Pair("Ratio",  pbudgetProposal->GetRatio()));
-        obj.push_back(Pair("AbsoluteYesCount",  (int64_t)pbudgetProposal->GetYesCount()-(int64_t)pbudgetProposal->GetNoCount()));
-        obj.push_back(Pair("YesCount",  (int64_t)pbudgetProposal->GetYesCount()));
-        obj.push_back(Pair("NoCount",  (int64_t)pbudgetProposal->GetNoCount()));
-        obj.push_back(Pair("AbstainCount",  (int64_t)pbudgetProposal->GetAbstainCount()));
-        obj.push_back(Pair("TotalPayment",  ValueFromAmount(pbudgetProposal->GetAmount()*pbudgetProposal->GetTotalPaymentCount())));
-        obj.push_back(Pair("MonthlyPayment",  ValueFromAmount(pbudgetProposal->GetAmount())));
-        
-        obj.push_back(Pair("IsEstablished",  pbudgetProposal->IsEstablished()));
-
-        std::string strError = "";
-        obj.push_back(Pair("IsValid",  pbudgetProposal->IsValid(chainActive.Tip(), strError)));
-        obj.push_back(Pair("fValid",  pbudgetProposal->fValid));
-
-        return obj;
-    }
-
-
-    if(strCommand == "gethash")
-    {
-        if (params.size() != 2)
-            throw runtime_error("Correct usage is 'proposal gethash <proposal-name>'");
-
-        std::string strName = SanitizeString(params[1].get_str());
-
-        CGovernanceObject* pbudgetProposal = governance.FindGovernanceObject(strName);
-
-        if(pbudgetProposal == NULL) return "Unknown proposal";
-
-        UniValue resultObj(UniValue::VOBJ);
-
-        std::vector<CGovernanceObject*> winningProps = governance.FindMatchingGovernanceObjects(Proposal);
-        BOOST_FOREACH(CGovernanceObject* pbudgetProposal, winningProps)
-        {
-            if(pbudgetProposal->GetName() != strName) continue;
-            if(!pbudgetProposal->fValid) continue;
-
-            CTxDestination address1;
-            ExtractDestination(pbudgetProposal->GetPayee(), address1);
-            CBitcoinAddress address2(address1);
-
-            resultObj.push_back(Pair(pbudgetProposal->GetHash().ToString(), pbudgetProposal->GetHash().ToString()));
-        }
-
-        if(resultObj.size() > 1) return resultObj;
-
-        return pbudgetProposal->GetHash().ToString();
-    }
-
-    if(strCommand == "show")
-    {
-
-    }
-
-
-    return NullUniValue;
-}
-
 UniValue budget(const UniValue& params, bool fHelp)
 {
     string strCommand;
     if (params.size() >= 1)
         strCommand = params[0].get_str();
+    string strSubCommand;
+    if (params.size() >= 2)
+        strSubCommand = params[1].get_str();
 
     if (fHelp  ||
         (strCommand != "check" && strCommand != "get" && strCommand != "all" && 
@@ -1245,11 +995,26 @@ UniValue budget(const UniValue& params, bool fHelp)
                 "\nAvailable commands:\n"
                 "  check              - Scan proposals and remove invalid from proposals list\n"
                 "  get                - Get a proposals|contract by hash\n"
-                "  all                - Get all proposals\n"
-                "  valid              - Get only valid proposals\n"
-                "  extended           - Get all proposals in extended form\n"
+                "  list               - Get all proposals (all|valid|extended)\n"
                 "  projection         - Show the projection of which proposals will be paid the next superblocks\n"
                 );
+
+    // help messages
+    if(strSubCommand == "help")
+    {
+        if(strCommand == "list")
+        {
+            throw runtime_error(
+                "budget \"list\"...\n"
+                "List all budgets in various configurations\n"
+                "\nAvailable commands:\n"
+                "  all            - Show all proposed settings for the network\n"
+                "  valid          - Show only valid settings for the network\n"
+                "  extended       - Show extended information about all settings\n"
+                "  active         - Show active values for each network setting\n"
+                );
+        }
+    }
 
     if(strCommand == "check")
     {
@@ -1307,40 +1072,16 @@ UniValue budget(const UniValue& params, bool fHelp)
         return resultObj;
     }
 
-    if(strCommand == "all" || strCommand == "valid" || strCommand == "extended" || strCommand == "get")
+    if(strCommand == "get")
     {
         uint256 nMatchHash = uint256();
         std::string strMatchName = "";
-        bool fMissing = true;
 
-        if(strCommand == "get" && params.size() == 2)
+        if (IsHex(params[1].get_str()))
         {
-
-            if (IsHex(params[1].get_str()))
-            {
-                nMatchHash = ParseHashV(params[1], "GovObj hash");
-            } else {
-                strMatchName = params[1].get_str();
-            }
-            fMissing = false;
-        }
-
-        // no command options
-        if(strCommand == "all" || strCommand == "valid" || strCommand == "extended") fMissing = false;
-
-        if(fMissing)
-        {
-            throw runtime_error(
-                    "budget (all|valid|extended|get)"
-                    "Show budget items in various ways\n"
-                    "\nAvailable commands:\n"
-                    "  all              - Scan proposals and remove invalid from proposals list\n"
-                    "  valid                - Get a proposals|contract by hash\n"
-                    "  all                - Get all proposals\n"
-                    "  valid              - Get only valid proposals\n"
-                    "  extended           - Get all proposals in extended form\n"
-                    "  projection         - Show the projection of which proposals will be paid the next superblocks\n"
-                    );
+            nMatchHash = ParseHashV(params[1], "GovObj hash");
+        } else {
+            strMatchName = params[1].get_str();
         }
 
         CBlockIndex* pindex;
@@ -1352,7 +1093,62 @@ UniValue budget(const UniValue& params, bool fHelp)
         UniValue resultObj(UniValue::VOBJ);
         int64_t nTotalAllotted = 0;
 
-        std::vector<CGovernanceObject*> winningProps = governance.FindMatchingGovernanceObjects(Proposal);
+        std::vector<CGovernanceObject*> winningProps = governance.FindMatchingGovernanceObjects(AllTypes);
+        
+        BOOST_FOREACH(CGovernanceObject* pbudgetProposal, winningProps)
+        {
+            if(pbudgetProposal->GetName() != strMatchName && pbudgetProposal->GetHash() != nMatchHash) continue;
+
+            CTxDestination address1;
+            ExtractDestination(pbudgetProposal->GetPayee(), address1);
+            CBitcoinAddress address2(address1);
+
+            UniValue bObj(UniValue::VOBJ);
+            bObj.push_back(Pair("Type",  pbudgetProposal->GetGovernanceTypeAsString()));
+            bObj.push_back(Pair("Name",  pbudgetProposal->GetName()));
+            bObj.push_back(Pair("URL",  pbudgetProposal->GetURL()));
+            bObj.push_back(Pair("Hash",  pbudgetProposal->GetHash().ToString()));
+            bObj.push_back(Pair("FeeHash",  pbudgetProposal->nFeeTXHash.ToString()));
+            bObj.push_back(Pair("BlockStart",  (int64_t)pbudgetProposal->GetBlockStart()));
+            bObj.push_back(Pair("BlockEnd",    (int64_t)pbudgetProposal->GetBlockEnd()));
+            bObj.push_back(Pair("TotalPaymentCount",  (int64_t)pbudgetProposal->GetTotalPaymentCount()));
+            bObj.push_back(Pair("RemainingPaymentCount",  (int64_t)pbudgetProposal->GetRemainingPaymentCount(pindex->nHeight)));
+            bObj.push_back(Pair("PaymentAddress",   address2.ToString()));
+            bObj.push_back(Pair("Ratio",  pbudgetProposal->GetRatio()));
+            bObj.push_back(Pair("AbsoluteYesCount",  (int64_t)pbudgetProposal->GetYesCount()-(int64_t)pbudgetProposal->GetNoCount()));
+            bObj.push_back(Pair("YesCount",  (int64_t)pbudgetProposal->GetYesCount()));
+            bObj.push_back(Pair("NoCount",  (int64_t)pbudgetProposal->GetNoCount()));
+            
+            bObj.push_back(Pair("AbstainCount",  (int64_t)pbudgetProposal->GetAbstainCount()));
+            bObj.push_back(Pair("TotalPayment",  ValueFromAmount(pbudgetProposal->GetAmount()*pbudgetProposal->GetTotalPaymentCount())));
+
+            bObj.push_back(Pair("MonthlyPayment",  ValueFromAmount(pbudgetProposal->GetAmount())));
+            bObj.push_back(Pair("IsEstablished",  pbudgetProposal->IsEstablished()));
+
+            std::string strError = "";
+            bObj.push_back(Pair("IsValid",  pbudgetProposal->IsValid(pindex, strError)));
+            bObj.push_back(Pair("IsValidReason",  strError.c_str()));
+            bObj.push_back(Pair("fValid",  pbudgetProposal->fValid));
+            
+            resultObj.push_back(Pair(pbudgetProposal->GetName(), bObj));
+        }
+
+        return resultObj;
+    }
+
+    if(strCommand == "all" || strCommand == "valid" || strCommand == "extended") 
+    {
+
+        CBlockIndex* pindex;
+        {
+            LOCK(cs_main);
+            pindex = chainActive.Tip();
+        }
+
+        UniValue resultObj(UniValue::VOBJ);
+        int64_t nTotalAllotted = 0;
+
+        std::vector<CGovernanceObject*> winningProps = governance.FindMatchingGovernanceObjects(AllTypes);
         
         BOOST_FOREACH(CGovernanceObject* pbudgetProposal, winningProps)
         {

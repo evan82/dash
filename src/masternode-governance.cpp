@@ -709,41 +709,6 @@ std::vector<CGovernanceObject*> CGovernanceManager::GetBudget()
     return vBudgetProposalsRet;
 }
 
-std::map<std::string, std::string> CGovernanceManager::GetSettings()
-{
-    LOCK(cs);
-
-    // ------- Sort budgets by Yes Count
-
-    std::map<std::string, int> mapSettingCounts; //name, absolute yes count
-	std::map<std::string, std::string> mapSettingValues; //name, value
-
-    std::map<uint256, CGovernanceObject>::iterator it = mapGovernanceObjects.begin();
-    while(it != mapGovernanceObjects.end()){
-    	CGovernanceObject& o = (*it).second;
-        if(o.GetGovernanceType() != Setting) {it++; continue;} //settings shouldn't get paid in the budget
-        o.CleanAndRemove(false);
-
-        // record the highest counts
-
-        std::string strName = o.GetName();
-        int nCount = o.GetAbsoluteYesCount();
-        std::string strValue = o.GetSuggestedValueAsString();
-        if(mapSettingCounts.count(o.GetName()))
-        {
-            mapSettingCounts.insert(make_pair(strName, nCount));
-            mapSettingValues.insert(make_pair(strName, strValue));
-        } else {
-            mapSettingCounts[strName] = nCount;
-            mapSettingValues[strName] = strValue;
-        }
-
-        ++it;
-    }
-
-    return mapSettingValues;
-}
-
 struct sortFinalizedBudgetsByVotes {
     bool operator()(const std::pair<CFinalizedBudget*, int> &left, const std::pair<CFinalizedBudget*, int> &right) {
         return left.second > right.second;
@@ -2133,6 +2098,11 @@ GovernanceObjectType CGovernanceObject::GetGovernanceType()
     return (GovernanceObjectType)nGovernanceType;   
 }
 
+std::string CGovernanceObject::GetGovernanceTypeAsString()
+{
+    return GovernanceTypeToString((GovernanceObjectType)nGovernanceType);   
+}
+
 void CGovernanceObject::SetNull()
 {
     fValid = false;
@@ -2198,3 +2168,16 @@ void CGovernanceVote::SetParent(CFinalizedBudget* pGovObjectParent)
 {
     pParent2 = pGovObjectParent;
 }
+
+// for contracts (should we subclass a contract object??)
+int64_t CGovernanceObject::GetContractActivationTime()
+{
+    //contracts always have at least two weeks
+    return nTime+CONTRACT_ACTIVATION_TIME;
+}
+
+bool CGovernanceObject::IsContractActivated()
+{
+    return GetTime() > GetContractActivationTime();
+}
+

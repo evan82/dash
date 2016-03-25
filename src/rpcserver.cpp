@@ -337,8 +337,7 @@ static const CRPCCommand vRPCCommands[] =
     { "dash",               "budget",                 &budget,                 true  },
     { "dash",               "proposal",               &proposal,               true  },
     { "dash",               "contract",               &contract,               true  },
-    // { "dash",               "switch",                 &switch,                 true  },
-    // { "dash",               "setting",                &setting,                true  },
+    { "dash",               "setting",                &setting,                true  },
     { "dash",               "vote",                   &vote,                   true  },
     { "dash",               "superblock",             &superblock,             true  },
     { "dash",               "spork",                  &spork,                  true  }, //deprecated
