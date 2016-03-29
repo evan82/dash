@@ -422,6 +422,7 @@ UniValue proposal(const UniValue& params, bool fHelp)
                 "  list               - List all proposals - (list valid|all|extended|active)\n"
                 "  get                - get proposal\n"
                 "  gethash            - Get proposal hash(es) by proposal name\n"
+
                 );
 
     if(strCommand == "prepare")

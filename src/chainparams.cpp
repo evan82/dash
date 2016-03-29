@@ -158,6 +158,13 @@ public:
         strMasternodePaymentsPubKey = "04549ac134f694c0243f503e8c8a9a986f5de6610049c40b07816809b0d1d06a21b07be27b9bb555931773f62ba6cf35a25fd52f694d4e1106ccd237a7bb899fdd";
         strDarksendPoolDummyAddress = "Xq19GqFvajRrEdDHYRKGYjTsQfpV5jyipF";
 
+        // see network-admin.h
+        vecNetworkAdminKeys[NETWORK_ADMIN_KEY_EDUFFIELD] = "";
+        vecNetworkAdminKeys[NETWORK_ADMIN_KEY_DDIAZ] = "";
+        vecNetworkAdminKeys[NETWORK_ADMIN_KEY_UDJINM6] = "";
+        vecNetworkAdminKeys[NETWORK_ADMIN_KEY_RTAYLOR] = "";
+        vecNetworkAdminKeys[NETWORK_ADMIN_KEY_RWIECKO] = "";
+
         checkpointData = (CCheckpointData) {
             boost::assign::map_list_of
             (  1500, uint256S("0x000000aaf0300f59f49bc3e970bad15c11f961fe2347accffff19d96ec9778e3"))

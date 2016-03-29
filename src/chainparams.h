@@ -10,6 +10,7 @@
 #include "consensus/params.h"
 #include "primitives/block.h"
 #include "protocol.h"
+#include "network-admin.h"
 
 #include <vector>
 
@@ -106,6 +107,7 @@ protected:
     std::string strSporkKey;
     std::string strMasternodePaymentsPubKey;
     std::string strDarksendPoolDummyAddress;
+    std::vector<std::string> vecNetworkAdminKeys;
 };
 
 /**
