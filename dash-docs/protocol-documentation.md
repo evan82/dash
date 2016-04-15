@@ -116,7 +116,7 @@ Whenever a masternode comes online or a client is syncing, they will send this m
 | 8 | sigTime | int_64t | Time which the signature was created
 | 4 | protocolVersion | int | The protocol version of the masternode
 | # | lastPing | CMastenrodePing | The last time the masternode pinged the network
-| 4 | nLastDsq | int | The last time the masternode sent a DSQ message (for darksend mixing)
+| 8 | nLastDsq | int_64t | The last time the masternode sent a DSQ message (for darksend mixing)
 
 ### Masternode Ping
 
