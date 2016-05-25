@@ -7,7 +7,6 @@
 #include "init.h"
 
 #include "flat-database.h"
-#include "governance.h"
 #include "masternode.h"
 #include "governance.h"
 #include "darksend.h"
