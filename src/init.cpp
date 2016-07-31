@@ -1775,8 +1775,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         LogPrintf("IS DARKSEND MASTER NODE\n");
         strMasterNodeAddr = GetArg("-masternodeaddr", "");
 
-        LogPrintf(" addr %s\n", strMasterNodeAddr);
-
         if(!strMasterNodeAddr.empty()){
             CService addrTest = CService(strMasterNodeAddr);
             if (!addrTest.IsValid()) {

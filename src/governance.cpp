@@ -685,27 +685,27 @@ void CGovernanceManager::CleanAndRemove(bool fSignatureCheck)
 
 int CGovernanceObject::GetAbsoluteYesCount(int nVoteSignalIn)
 {
-    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_YES) - governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_NO);
+    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_YES) - governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_NO)*100;
 }
 
 int CGovernanceObject::GetAbsoluteNoCount(int nVoteSignalIn)
 {
-    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_NO) - governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_YES);
+    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_NO) - governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_YES)*100;
 }
 
 int CGovernanceObject::GetYesCount(int nVoteSignalIn)
 {
-    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_YES);
+    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_YES)*100;
 }
 
 int CGovernanceObject::GetNoCount(int nVoteSignalIn)
 {
-    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_NO);
+    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_NO)*100;
 }
 
 int CGovernanceObject::GetAbstainCount(int nVoteSignalIn)
 {
-    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_ABSTAIN);
+    return governance.CountMatchingVotes((*this), nVoteSignalIn, VOTE_OUTCOME_ABSTAIN)*100;
 }
 
 void CGovernanceObject::Relay()

@@ -7,6 +7,7 @@
 #include "init.h"
 #include "activemasternode.h"
 #include "governance.h"
+#include "darksend.h"
 #include "masternode-payments.h"
 #include "masternode-sync.h"
 #include "masternodeconfig.h"
@@ -63,7 +64,7 @@ UniValue mngovernance(const UniValue& params, bool fHelp)
         strCommand = params[0].get_str();
 
     if (fHelp  ||
-        (strCommand != "vote-many" && strCommand != "vote-alias" && strCommand != "prepare" && strCommand != "submit" &&
+        (strCommand != "vote-conf" && strCommand != "vote-alias" && strCommand != "prepare" && strCommand != "submit" &&
          strCommand != "vote" && strCommand != "get" && strCommand != "list" && strCommand != "diff"))
         throw runtime_error(
                 "mngovernance \"command\"...\n"
@@ -74,9 +75,10 @@ UniValue mngovernance(const UniValue& params, bool fHelp)
                 "  get                - Get proposal hash(es) by proposal name\n"
                 "  list               - List all proposals\n"
                 "  diff               - List differences since last diff\n"
+                "  vote-conf          - Vote on a governance object by masternode configured in dash.conf\n"
                 "  vote-alias         - Vote on a governance object by masternode alias\n"
                 );
-
+    
 
     /*
         12.1 todo - 
@@ -190,6 +192,89 @@ UniValue mngovernance(const UniValue& params, bool fHelp)
 
     }
 
+    if(strCommand == "vote-conf")
+    {
+        if(params.size() != 4)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Correct usage is 'mngovernance vote-conf <governance-hash> [funding|valid|delete] [yes|no|abstain]'");
+
+        uint256 hash;
+        std::string strVote;
+
+        hash = ParseHashV(params[1], "Object hash");
+        std::string strVoteAction = params[2].get_str();
+        std::string strVoteOutcome = params[3].get_str();
+        
+        int nVoteSignal = ConvertVoteSignal(strVoteAction);
+        if(nVoteSignal == VOTE_SIGNAL_NONE || nVoteSignal == -1)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid vote signal. Please use one of the following: 'yes', 'no' or 'abstain'");
+
+        int nVoteOutcome = ConvertVoteOutcome(strVoteOutcome);
+        if(nVoteOutcome == VOTE_OUTCOME_NONE || nVoteOutcome == -1)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid vote outcome. Please using one of the following: (funding|valid|delete|clear_registers|endorsed|release_bounty1|release_bounty2|release_bounty3) OR `custom sentinel code` "); 
+
+        int success = 0;
+        int failed = 0;
+
+        UniValue resultsObj(UniValue::VOBJ);
+
+        std::string errorMessage;
+        std::vector<unsigned char> vchMasterNodeSignature;
+        std::string strMasterNodeSignMessage;
+
+        CPubKey pubKeyCollateralAddress;
+        CKey keyCollateralAddress;
+        CPubKey pubKeyMasternode;
+        CKey keyMasternode;
+
+        UniValue statusObj(UniValue::VOBJ);
+
+        if(!darkSendSigner.SetKey(strMasterNodePrivKey, errorMessage, keyMasternode, pubKeyMasternode))
+        {
+            std::string notCapableReason = "Error upon calling SetKey: " + errorMessage + " - " + strMasterNodePrivKey; 
+            LogPrintf("CActiveMasternode::ManageStatus() - %s\n", notCapableReason);
+            return notCapableReason;
+        }
+
+        CMasternode* pmn = mnodeman.Find(pubKeyMasternode);
+        if(pmn == NULL)
+        {
+            failed++;
+            statusObj.push_back(Pair("result", "failed"));
+            statusObj.push_back(Pair("errorMessage", "Can't find masternode by pubkey"));
+            resultsObj.push_back(Pair("dash.conf", statusObj));
+            return "Can't find masternode by pubkey";
+        }
+
+        CGovernanceVote vote(pmn->vin, hash, nVoteOutcome, nVoteSignal);
+        if(!vote.Sign(keyMasternode, pubKeyMasternode)){
+            failed++;
+            statusObj.push_back(Pair("result", "failed"));
+            statusObj.push_back(Pair("errorMessage", "Failure to sign."));
+            resultsObj.push_back(Pair("dash.conf", statusObj));
+            return "Failure to sign.";
+        }
+
+        std::string strError = "";
+        if(governance.UpdateGovernanceObject(vote, NULL, strError)) {
+            governance.mapSeenVotes.insert(make_pair(vote.GetHash(), SEEN_OBJECT_IS_VALID));
+            vote.Relay();
+            success++;
+            statusObj.push_back(Pair("result", "success"));
+        } else {
+            failed++;
+            statusObj.push_back(Pair("result", strError.c_str()));
+        }
+
+        resultsObj.push_back(Pair("dash.conf", statusObj));
+
+        UniValue returnObj(UniValue::VOBJ);
+        returnObj.push_back(Pair("overall", strprintf("Voted successfully %d time(s) and failed %d time(s).", success, failed)));
+        returnObj.push_back(Pair("detail", resultsObj));
+
+        return returnObj;
+    }
+
+
     if(strCommand == "vote-alias")
     {
         if(params.size() != 5)
@@ -281,6 +366,7 @@ UniValue mngovernance(const UniValue& params, bool fHelp)
 
         return returnObj;
     }
+
 
     if(strCommand == "list" || strCommand == "diff")
     {
