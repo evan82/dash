@@ -42,6 +42,7 @@ struct Params {
     int nMasternodePaymentsIncreasePeriod; // in blocks
     int nBudgetPaymentsStartBlock;
     int nBudgetPaymentsCycleBlocks;
+    int nSuperblockCycle;
     int nBudgetPaymentsWindowBlocks;
     int nBudgetProposalEstablishingTime; // in seconds
     int nMasternodeMinimumConfirmations;
