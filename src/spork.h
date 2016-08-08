@@ -65,13 +65,16 @@ class CSporkMessage
 {
 public:
     std::vector<unsigned char> vchSig;
-    int nSporkID;
     int64_t nValue;
     int64_t nTimeSigned;
+    int nSporkID;
 
     uint256 GetHash(){
-        uint256 n = HashX11(BEGIN(nSporkID), END(nTimeSigned));
-        return n;
+        CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
+        ss << nSporkID;
+        ss << nValue;
+        ss << nTimeSigned;
+        return ss.GetHash();
     }
 
     ADD_SERIALIZE_METHODS;

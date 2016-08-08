@@ -164,7 +164,7 @@ UniValue gobject(const UniValue& params, bool fHelp)
 
         // ASSEMBLE NEW GOVERNANCE OBJECT FROM USER PARAMETERS
 
-        LOCK(cs_main);
+        LOCK2(cs_main, governance.cs);
         CBlockIndex* pindex = chainActive.Tip();
 
         std::vector<CMasternodeConfig::CMasternodeEntry> mnEntries;
@@ -200,7 +200,6 @@ UniValue gobject(const UniValue& params, bool fHelp)
         }
 
         // RELAY THIS OBJECT
-
         governance.mapSeenGovernanceObjects.insert(make_pair(govobj.GetHash(), SEEN_OBJECT_IS_VALID));
         govobj.Relay();
         governance.AddGovernanceObject(govobj);
@@ -271,6 +270,7 @@ UniValue gobject(const UniValue& params, bool fHelp)
             return "Failure to sign.";
         }
 
+        LOCK(governance.cs);
         std::string strError = "";
         if(governance.AddOrUpdateVote(vote, NULL, strError)) {
             governance.mapSeenVotes.insert(make_pair(vote.GetHash(), SEEN_OBJECT_IS_VALID));
@@ -379,6 +379,7 @@ UniValue gobject(const UniValue& params, bool fHelp)
 
             // UPDATE LOCAL DATABASE WITH NEW OBJECT SETTINGS
 
+            LOCK(governance.cs);
             std::string strError = "";
             if(governance.AddOrUpdateVote(vote, NULL, strError)) {
                 governance.mapSeenVotes.insert(make_pair(vote.GetHash(), SEEN_OBJECT_IS_VALID));
@@ -430,6 +431,8 @@ UniValue gobject(const UniValue& params, bool fHelp)
         UniValue objResult(UniValue::VOBJ);
 
         // GET MATCHING GOVERNANCE OBJECTS
+
+        LOCK(governance.cs);
 
         std::vector<CGovernanceObject*> objs = governance.GetAllNewerThan(nStartTime);
         governance.UpdateLastDiffTime(GetTime());
@@ -484,15 +487,10 @@ UniValue gobject(const UniValue& params, bool fHelp)
         if(pGovObj == NULL)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown govobj");
 
-        CBlockIndex* pindex;
-        {
-            LOCK(cs_main);
-            pindex = chainActive.Tip();
-        }
-
         // REPORT BASIC OBJECT STATS
 
-        LOCK(cs_main);
+        LOCK2(cs_main, governance.cs);
+
         UniValue objResult(UniValue::VOBJ);
         objResult.push_back(Pair("Name",  pGovObj->GetName()));
         objResult.push_back(Pair("Hash",  pGovObj->GetHash().ToString()));
@@ -559,6 +557,8 @@ UniValue gobject(const UniValue& params, bool fHelp)
         }
 
         // FIND OBJECT USER IS LOOKING FOR
+
+        LOCK(governance.cs);
 
         CGovernanceObject* pGovObj = governance.FindGovernanceObject(hash);
 

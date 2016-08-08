@@ -18,6 +18,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/shared_ptr.hpp>
 #include "init.h"
+#include "governance.h"
 
 using namespace std;
 
@@ -27,6 +28,7 @@ using namespace std;
 class CSuperblock;
 class CGovernanceTrigger;
 class CGovernanceTriggerManager;
+class CSuperblockManager;
 
 typedef boost::shared_ptr<CSuperblock> CSuperblock_sptr;
 
@@ -35,17 +37,6 @@ extern CGovernanceTriggerManager triggerman;
 
 // SPLIT A STRING UP - USED FOR SUPERBLOCK PAYMENTS
 std::vector<std::string> SplitBy(std::string strCommand, std::string strDelimit);
-
-struct trigger_man_rec_t  {
-
-    trigger_man_rec_t(int status_= SEEN_OBJECT_UNKNOWN,CSuperblock_sptr superblock_=CSuperblock_sptr())
-    : status(status_),
-      superblock(superblock_)
-    {}
-
-    int status;
-    CSuperblock_sptr superblock;
-};
 
 /**
 *   Trigger Mananger
@@ -56,7 +47,11 @@ struct trigger_man_rec_t  {
 
 class CGovernanceTriggerManager
 {
-    typedef std::map<uint256, trigger_man_rec_t> trigger_m_t;
+    friend class CSuperblockManager;
+    friend class CGovernanceManager;
+
+public: // Typedefs
+    typedef std::map<uint256, CSuperblock_sptr> trigger_m_t;
 
     typedef trigger_m_t::iterator trigger_m_it;
 
@@ -66,16 +61,21 @@ private:
     trigger_m_t mapTrigger;
 
 public:
+    CGovernanceTriggerManager()
+        : mapTrigger()
+    {}
+
+private:
     std::vector<CSuperblock_sptr> GetActiveTriggers();
+
     bool AddNewTrigger(uint256 nHash);
+
     void CleanAndRemove();
 
-    bool UpdateStatus(uint256 nHash, int nNewStatus);
-    int GetStatus(uint256 nHash);
 };
 
 /**
-*   Superblock Mananger
+*   Superblock Manager
 *
 *   Class for querying superblock information
 */
@@ -105,7 +105,10 @@ public:
 
     static std::string GetRequiredPaymentsString(int nBlockHeight);
     static bool IsValid(const CTransaction& txNew, int nBlockHeight);
+
+private:
     static bool GetBestSuperblock(CSuperblock_sptr& pBlock, int nBlockHeight);
+
 };
 
 /**
@@ -175,37 +178,52 @@ class CSuperblock : public CGovernanceObject
     */
 
 private:
-    CGovernanceObject* pGovObj;
+    uint256 nGovObjHash;
 
     bool fError;
     std::string strError;
 
     int nEpochStart;
-    bool nExecuted;
+    int status;
     std::vector<CGovernancePayment> vecPayments;
 
 public:
 
     CSuperblock()
-        : pGovObj(NULL),
+        : nGovObjHash(),
           fError(true),
           strError(),
           nEpochStart(0),
-          nExecuted(false),
+          status(SEEN_OBJECT_UNKNOWN),
           vecPayments()
     {}
 
-    CSuperblock(CGovernanceObject* pGovObjIn)
-        : pGovObj(pGovObjIn),
+    CSuperblock(uint256& nHash)
+        : nGovObjHash(nHash),
           fError(true),
           strError(),
           nEpochStart(0),
-          nExecuted(false),
+          status(SEEN_OBJECT_UNKNOWN),
           vecPayments()
     {
         DBG( cout << "CSuperblock Constructor Start" << endl; );
+
+        CGovernanceObject* pGovObj = GetGovernanceObject();
+
         if(!pGovObj) {
-            DBG( cout << "CSuperblock Constructor pGovObj is NULL, returning" << endl; );
+            DBG( cout << "CSuperblock Constructor pGovObjIn is NULL, returning" << endl; );
+            strError = "Failed to find Governance Object";
+            return;
+        }
+
+        DBG( cout << "CSuperblock Constructor pGovObj : "
+             << pGovObj->GetDataAsString()
+             << ", nObjectType = " << pGovObj->nObjectType
+             << endl; );
+
+        if(pGovObj->GetObjectType() != GOVERNANCE_OBJECT_TRIGGER)  {
+            DBG( cout << "CSuperblock Constructor pHoObj not a trigger, returning" << endl; );
+            strError = "Governance Object not a trigger";
             return;
         }
 
@@ -225,7 +243,6 @@ public:
             std::string strAmounts = obj["payment_amounts"].get_str();
             ParsePaymentSchedule(strAddresses, strAmounts);
 
-            nExecuted = false;
             fError = false;
             strError = "";
         }
@@ -240,8 +257,26 @@ public:
         DBG( cout << "CSuperblock Constructor End" << endl; );
     }
 
+    int GetStatus()  {
+        return status;
+    }
+
+    void SetStatus(int status_)  {
+        status = status_;
+    }
+
+    int GetErrorState()  {
+        return fError;
+    }
+
+    std::string GetErrorMessage()  {
+        return strError;
+    }
+
     CGovernanceObject* GetGovernanceObject()  {
-        return pGovObj;
+        AssertLockHeld(governance.cs);
+        CGovernanceObject* pObj = governance.FindGovernanceObject(nGovObjHash);
+        return pObj;
     }
 
     int GetBlockStart()
@@ -312,13 +347,13 @@ public:
     // IS THIS TRIGGER ALREADY EXECUTED?
     bool IsExecuted()
     {
-        return triggerman.GetStatus(pGovObj->GetHash()) == SEEN_OBJECT_EXECUTED;
+        return (status == SEEN_OBJECT_EXECUTED);
     };
 
     // TELL THE ENGINE WE EXECUTED THIS EVENT
     void SetExecuted()
     {
-        triggerman.UpdateStatus(pGovObj->GetHash(), SEEN_OBJECT_EXECUTED);
+        status = SEEN_OBJECT_EXECUTED;
     };
 
     int CountPayments()

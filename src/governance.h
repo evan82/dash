@@ -69,6 +69,7 @@ private:
     const CBlockIndex *pCurrentBlockIndex;
 
     int64_t nTimeLastDiff;
+    int nCachedBlockHeight;
 
 public:
     // critical section to protect the inner data structures
@@ -87,9 +88,14 @@ public:
     std::map<uint256, CGovernanceVote> mapVotesByHash;
     std::map<uint256, CGovernanceVote> mapVotesByType;
 
-    CGovernanceManager() {
-        mapObjects.clear();
-    }
+    CGovernanceManager()
+        : mapCollateral(),
+          pCurrentBlockIndex(NULL),
+          nTimeLastDiff(0),
+          nCachedBlockHeight(0),
+          cs(),
+          mapObjects()
+    {}
 
     void ClearSeen() {
         mapSeenGovernanceObjects.clear();
@@ -157,6 +163,15 @@ public:
     void UpdatedBlockTip(const CBlockIndex *pindex);
     int64_t GetLastDiffTime() {return nTimeLastDiff;}
     void UpdateLastDiffTime(int64_t nTimeIn) {nTimeLastDiff=nTimeIn;}
+
+    int GetCachedBlockHeight() { return nCachedBlockHeight; }
+
+private:
+    void UpdateCachedBlockHeight()  {
+        LOCK(cs_main);
+        nCachedBlockHeight = chainActive.Height();
+    }
+
 };
 
 /**
@@ -191,6 +206,7 @@ public:
     bool fCachedEndorsed; // true == minimum network support has been reached flagging this object as endorsed by an elected representative body (e.g. business review board / technecial review board /etc)
     bool fDirtyCache; // object was updated and cached values should be updated soon
     bool fUnparsable; // data field was unparsible, object will be rejected
+    bool fExpired; // Object is no longer of interest
 
     CGovernanceObject();
     CGovernanceObject(uint256 nHashParentIn, int nRevisionIn, std::string strNameIn, int64_t nTime, uint256 nCollateralHashIn, std::string strDataIn);

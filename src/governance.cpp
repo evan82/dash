@@ -146,6 +146,8 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, std::string& strCommand, C
     else if (strCommand == NetMsgType::MNGOVERNANCEOBJECT)
 
     {
+        UpdateCachedBlockHeight();
+        LOCK(cs);
         // MAKE SURE WE HAVE A VALID REFERENCE TO THE TIP BEFORE CONTINUING
 
         if(!pCurrentBlockIndex) return;
@@ -188,7 +190,6 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, std::string& strCommand, C
         }
 
         // UPDATE THAT WE'VE SEEN THIS OBJECT
-
         mapSeenGovernanceObjects.insert(make_pair(govobj.GetHash(), SEEN_OBJECT_IS_VALID));
         masternodeSync.AddedBudgetItem(govobj.GetHash());
 
@@ -252,6 +253,7 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, std::string& strCommand, C
 
 void CGovernanceManager::CheckOrphanVotes()
 {
+    UpdateCachedBlockHeight();
     LOCK(cs);
 
     std::string strError = "";
@@ -268,6 +270,7 @@ void CGovernanceManager::CheckOrphanVotes()
 
 bool CGovernanceManager::AddGovernanceObject(CGovernanceObject& govobj)
 {
+    UpdateCachedBlockHeight();
     LOCK(cs);
     std::string strError = "";
 
@@ -315,6 +318,8 @@ void CGovernanceManager::UpdateCachesAndClean()
 {
     LogPrintf("CGovernanceManager::UpdateCachesAndClean \n");
 
+    AssertLockHeld(cs);
+
     // DOUBLE CHECK THAT WE HAVE A VALID POINTER TO TIP
 
     if(!pCurrentBlockIndex) return;
@@ -325,31 +330,34 @@ void CGovernanceManager::UpdateCachesAndClean()
 
     std::map<uint256, int> mapDirtyObjects;
 
+    // Clean up any expired or invalid triggers
+    triggerman.CleanAndRemove();
+
     while(it != mapObjects.end())
     {   
         CGovernanceObject* pObj = &((*it).second);
 
-        // IF CACHE IS NOT DIRTY, WHY DO THIS?
-
-        if(!pObj || !pObj->fDirtyCache)
-        {
+        if(!pObj)  {
             ++it;
             continue;
         }
 
-        mapDirtyObjects.insert(make_pair((*it).first, 1));
-
-        // UPDATE LOCAL VALIDITY AGAINST CRYPTO DATA
-        
-        pObj->UpdateLocalValidity(pCurrentBlockIndex);
-
-        // UPDATE SENTINEL SIGNALING VARIABLES
-        
-        pObj->UpdateSentinelVariables(pCurrentBlockIndex);
+        // IF CACHE IS NOT DIRTY, WHY DO THIS?
+        if(pObj->fDirtyCache)  {
+            mapDirtyObjects.insert(make_pair((*it).first, 1));
+            
+            // UPDATE LOCAL VALIDITY AGAINST CRYPTO DATA
+            
+            pObj->UpdateLocalValidity(pCurrentBlockIndex);
+            
+            // UPDATE SENTINEL SIGNALING VARIABLES
+            
+            pObj->UpdateSentinelVariables(pCurrentBlockIndex);
+        }
 
         // IF DELETE=TRUE, THEN CLEAN THE MESS UP!
 
-        if(pObj->fCachedDelete)
+        if(pObj->fCachedDelete || pObj->fExpired)
         {
             LogPrintf("UpdateCachesAndClean --- erase obj %s\n", (*it).first.ToString());
             mapObjects.erase(it++);
@@ -468,6 +476,7 @@ struct sortProposalsByVotes {
 
 void CGovernanceManager::NewBlock()
 {
+    UpdateCachedBlockHeight();
     TRY_LOCK(cs, fBudgetNewBlock);
     if(!fBudgetNewBlock || !pCurrentBlockIndex) return;
 
@@ -493,6 +502,7 @@ void CGovernanceManager::NewBlock()
 
 void CGovernanceManager::Sync(CNode* pfrom, uint256 nProp)
 {
+    UpdateCachedBlockHeight();
     LOCK(cs);
 
     /*
@@ -539,6 +549,7 @@ void CGovernanceManager::SyncParentObjectByVote(CNode* pfrom, const CGovernanceV
 
 bool CGovernanceManager::AddOrUpdateVote(const CGovernanceVote& vote, CNode* pfrom, std::string& strError)
 {
+    UpdateCachedBlockHeight();
     LOCK(cs);
 
     // MAKE SURE WE HAVE THE PARENT OBJECT THE VOTE IS FOR
@@ -624,6 +635,7 @@ CGovernanceObject::CGovernanceObject()
     fCachedEndorsed = false;
     fDirtyCache = true;
     fUnparsable = false;
+    fExpired = false;
 
     // PARSE JSON DATA STORAGE (STRDATA)
     LoadData();
@@ -649,6 +661,7 @@ CGovernanceObject::CGovernanceObject(uint256 nHashParentIn, int nRevisionIn, std
     fCachedEndorsed = false;
     fDirtyCache = true;
     fUnparsable = false;
+    fExpired = false;
 
     // PARSE JSON DATA STORAGE (STRDATA)
     LoadData();
@@ -673,6 +686,7 @@ CGovernanceObject::CGovernanceObject(const CGovernanceObject& other)
     fCachedDelete = other.fCachedDelete;
     fCachedEndorsed = other.fCachedEndorsed;
     fDirtyCache = other.fDirtyCache;
+    fExpired = other.fExpired;
 }
 
 int CGovernanceObject::GetObjectType()
@@ -702,7 +716,7 @@ uint256 CGovernanceObject::GetHash()
     // fee_tx is left out on purpose
     uint256 h1 = ss.GetHash();
 
-    printf("CGovernanceObject::GetHash %i %s %li %s\n", nRevision, strName.c_str(), nTime, strData.c_str());
+    DBG( printf("CGovernanceObject::GetHash %i %s %li %s\n", nRevision, strName.c_str(), nTime, strData.c_str()); );
 
     return h1;
 }
@@ -1006,7 +1020,7 @@ void CGovernanceObject::UpdateSentinelVariables(const CBlockIndex *pCurrentBlock
     fCachedDelete = false;
     fCachedEndorsed = false;
     fDirtyCache = false;
-
+    
     // SET SENTINEL FLAGS TO TRUE IF MIMIMUM SUPPORT LEVELS ARE REACHED
     // ARE ANY OF THESE FLAGS CURRENTLY ACTIVATED?
 
@@ -1045,4 +1059,5 @@ void CGovernanceObject::swap(CGovernanceObject& first, CGovernanceObject& second
     swap(first.fCachedDelete, second.fCachedDelete);
     swap(first.fCachedEndorsed, second.fCachedEndorsed);
     swap(first.fDirtyCache, second.fDirtyCache);
+    swap(first.fExpired, second.fExpired);
 }
