@@ -242,7 +242,7 @@ extern const char *DSEG;
 extern const char *SYNCSTATUSCOUNT;
 extern const char *MNGOVERNANCESYNC;
 extern const char *MNGOVERNANCEOBJECT;
-extern const char *MNGOVERNANCEOBJECTVOTE;
+extern const char *MNGOVERNANCEVOTE;
 };
 
 /* Get a vector of all valid message types (see above) */
@@ -342,21 +342,17 @@ enum {
     MSG_FILTERED_BLOCK,
     MSG_TXLOCK_REQUEST,
     MSG_TXLOCK_VOTE,
-    // Dash message types
-    // NOTE: declare non-implmented here, we must keep this enum consistent and backwards compatible
     MSG_SPORK,
     MSG_MASTERNODE_WINNER,
     MSG_MASTERNODE_SCANNING_ERROR, // not implemented
-    MSG_BUDGET_VOTE, // depreciated since 12.1
-    MSG_BUDGET_PROPOSAL, // depreciated since 12.1
-    MSG_BUDGET_FINALIZED, // depreciated since 12.1
-    MSG_BUDGET_FINALIZED_VOTE, // depreciated since 12.1
+    MSG_GOVERNANCE_VOTE,
+    MSG_GOVERNANCE_OBJECT,
+    MSG_BUDGET_FINALIZED,
+    MSG_BUDGET_FINALIZED_VOTE,
     MSG_MASTERNODE_QUORUM, // not implemented
     MSG_MASTERNODE_ANNOUNCE,
     MSG_MASTERNODE_PING,
-    MSG_DSTX,
-    MSG_GOVERNANCE_OBJECT,
-    MSG_GOVERNANCE_OBJECT_VOTE
+    MSG_DSTX
 };
 
 #endif // BITCOIN_PROTOCOL_H

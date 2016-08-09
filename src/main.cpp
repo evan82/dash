@@ -3712,18 +3712,18 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
                              REJECT_INVALID, "bad-cb-multiple");
 
 
-    // ----------- instantX transaction scanning -----------
+    // DASH : CHECK TRANSACTIONS FOR INSTANT SEND
 
-    if(sporkManager.IsSporkActive(SPORK_3_INSTANTX_BLOCK_FILTERING)){
+    if(IsSporkActive(SPORK_3_INSTANTX_BLOCK_FILTERING)){
         BOOST_FOREACH(const CTransaction& tx, block.vtx){
             if (!tx.IsCoinBase()){
-                //only reject blocks when it's based on complete consensus
+                // LOOK FOR TRANSACTION LOCK IN OUR MAP OF INPUTS
                 BOOST_FOREACH(const CTxIn& in, tx.vin){
                     if(mapLockedInputs.count(in.prevout)){
                         if(mapLockedInputs[in.prevout] != tx.GetHash()){
                             mapRejectedBlocks.insert(make_pair(block.GetHash(), GetTime()));
-                            LogPrintf("CheckBlock() : found conflicting transaction with transaction lock %s %s\n", mapLockedInputs[in.prevout].ToString(), tx.GetHash().ToString());
-                            return state.DoS(0, error("CheckBlock() : found conflicting transaction with transaction lock"),
+                            LogPrintf("CheckBlock(DASH) : found conflicting transaction with transaction lock %s %s\n", mapLockedInputs[in.prevout].ToString(), tx.GetHash().ToString());
+                            return state.DoS(0, error("CheckBlock(DASH) : found conflicting transaction with transaction lock"),
                                              REJECT_INVALID, "conflicting-tx-ix");
                         }
                     }
@@ -3731,11 +3731,10 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
             }
         }
     } else {
-        LogPrintf("CheckBlock() : skipping transaction locking checks\n");
+        LogPrintf("CheckBlock(DASH) : skipping transaction locking checks\n");
     }
 
-
-    // ----------- masternode payments / budgets -----------
+    // DASH : CHECK MASTERNODE PAYMENTS OR SUPERBLOCKS
 
     CBlockIndex* pindexPrev = chainActive.Tip();
     if(pindexPrev != NULL)
@@ -3744,7 +3743,8 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
         if(pindexPrev->GetBlockHash() == block.hashPrevBlock)
         {
             nHeight = pindexPrev->nHeight+1;
-        } else { //out of order
+        } else {
+            // IF WE CAN'T FIND A SPECIFIC MATCH
             BlockMap::iterator mi = mapBlockIndex.find(block.hashPrevBlock);
             if (mi != mapBlockIndex.end() && (*mi).second)
                 nHeight = (*mi).second->nHeight+1;
@@ -3754,14 +3754,14 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
             if(!IsBlockPayeeValid(block.vtx[0], nHeight))
             {
                 mapRejectedBlocks.insert(make_pair(block.GetHash(), GetTime()));
-                return state.DoS(100, error("CheckBlock() : Couldn't find masternode/budget payment"));
+                return state.DoS(100, error("CheckBlock() : Couldn't find masternode or superblock payments"));
             }
         } else {
-            LogPrintf("CheckBlock() : WARNING: Couldn't find previous block, skipping IsBlockPayeeValid()\n");
+            LogPrintf("CheckBlock() : WARNING: Couldn't find previous block, skipping IsBlockPayeeValid(!)\n");
         }
     }
 
-    // -------------------------------------------
+    // END DASH
 
     // Check transactions
     BOOST_FOREACH(const CTransaction& tx, block.vtx)
@@ -4950,6 +4950,19 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     case MSG_MASTERNODE_WINNER:
         return mnpayments.mapMasternodePayeeVotes.count(inv.hash);
 
+    case MSG_GOVERNANCE_VOTE:
+        {
+            LOCK(governance.cs);
+            return governance.mapVotesByHash.count(inv.hash);            
+        }
+
+
+    case MSG_GOVERNANCE_OBJECT:
+        {
+            LOCK(governance.cs);
+            return governance.mapObjects.count(inv.hash);
+        }
+
     case MSG_MASTERNODE_ANNOUNCE:
         return mnodeman.mapSeenMasternodeBroadcast.count(inv.hash);
 
@@ -4959,11 +4972,6 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     case MSG_DSTX:
         return mapDarksendBroadcastTxes.count(inv.hash);
 
-    case MSG_GOVERNANCE_OBJECT:
-        return governance.mapObjects.count(inv.hash);
-
-    case MSG_GOVERNANCE_OBJECT_VOTE:
-        return governance.mapVotesByHash.count(inv.hash);
     }
 
     // Don't know what it is, just say we already got one
@@ -5167,12 +5175,12 @@ void static ProcessGetData(CNode* pfrom, const Consensus::Params& consensusParam
                     }
                 }
 
-                if (!pushed && inv.type == MSG_GOVERNANCE_OBJECT_VOTE) {
+                if (!pushed && inv.type == MSG_GOVERNANCE_VOTE) {
                     if(governance.mapVotesByHash.count(inv.hash)) {
                         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
                         ss.reserve(1000);
                         ss << governance.mapVotesByHash[inv.hash];
-                        pfrom->PushMessage(NetMsgType::MNGOVERNANCEOBJECTVOTE, ss);
+                        pfrom->PushMessage(NetMsgType::MNGOVERNANCEVOTE, ss);
                         pushed = true;
                     }
                 }
@@ -6191,7 +6199,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             mnodeman.ProcessMessage(pfrom, strCommand, vRecv);
             mnpayments.ProcessMessage(pfrom, strCommand, vRecv);
             ProcessMessageInstantSend(pfrom, strCommand, vRecv);
-            sporkManager.ProcessSpork(pfrom, strCommand, vRecv);
+            ProcessSpork(pfrom, strCommand, vRecv);
             masternodeSync.ProcessMessage(pfrom, strCommand, vRecv);
             governance.ProcessMessage(pfrom, strCommand, vRecv);
         }

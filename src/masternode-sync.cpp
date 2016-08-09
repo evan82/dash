@@ -122,6 +122,7 @@ std::string CMasternodeSync::GetAssetName()
         case(MASTERNODE_SYNC_GOVERNANCE):
             return "MASTERNODE_SYNC_GOVERNANCE";
     }
+    return "error";
 }
 
 void CMasternodeSync::GetNextAsset()

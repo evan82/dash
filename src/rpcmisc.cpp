@@ -121,7 +121,7 @@ UniValue debug(const UniValue& params, bool fHelp)
         throw runtime_error(
             "debug ( 0|1|addrman|alert|bench|coindb|db|lock|rand|rpc|selectcoins|mempool"
             "|mempoolrej|net|proxy|prune|http|libevent|tor|zmq|"
-            "dash|privatesend|instantsend|masternode|keepass|mnpayments|mngovernance )\n"
+            "dash|privatesend|instantsend|masternode|keepass|mnpayments|gobject )\n"
             "Change debug category on the fly. Specify single category or use comma to specify many.\n"
             "\nExamples:\n"
             + HelpExampleCli("debug", "dash")
@@ -237,14 +237,14 @@ UniValue spork(const UniValue& params, bool fHelp)
         UniValue ret(UniValue::VOBJ);
         for(int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++){
             if(sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                ret.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), sporkManager.GetSporkValue(nSporkID)));
+                ret.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), GetSporkValue(nSporkID)));
         }
         return ret;
     } else if(params.size() == 1 && params[0].get_str() == "active"){
         UniValue ret(UniValue::VOBJ);
         for(int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++){
             if(sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                ret.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), sporkManager.IsSporkActive(nSporkID)));
+                ret.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), IsSporkActive(nSporkID)));
         }
         return ret;
     } else if (params.size() == 2){
@@ -258,7 +258,7 @@ UniValue spork(const UniValue& params, bool fHelp)
 
         //broadcast new spork
         if(sporkManager.UpdateSpork(nSporkID, nValue)){
-            sporkManager.ExecuteSpork(nSporkID, nValue);
+            ExecuteSpork(nSporkID, nValue);
             return "success";
         } else {
             return "failure";

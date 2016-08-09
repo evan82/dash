@@ -63,7 +63,7 @@ const char *DSEG="dseg";
 const char *SYNCSTATUSCOUNT="ssc";
 const char *MNGOVERNANCESYNC="govsync";
 const char *MNGOVERNANCEOBJECT="govobj";
-const char *MNGOVERNANCEOBJECTVOTE="govobjvote";
+const char *MNGOVERNANCEVOTE="govobjvote";
 };
 
 static const char* ppszTypeName[] =
@@ -88,7 +88,7 @@ static const char* ppszTypeName[] =
     NetMsgType::MNPING,
     NetMsgType::DSTX,
     NetMsgType::MNGOVERNANCEOBJECT,
-    NetMsgType::MNGOVERNANCEOBJECTVOTE
+    NetMsgType::MNGOVERNANCEVOTE
 };
 
 /** All known message types. Keep this in the same order as the list of
@@ -139,7 +139,7 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::SYNCSTATUSCOUNT,
     NetMsgType::MNGOVERNANCESYNC,
     NetMsgType::MNGOVERNANCEOBJECT,
-    NetMsgType::MNGOVERNANCEOBJECTVOTE
+    NetMsgType::MNGOVERNANCEVOTE
 };
 const static std::vector<std::string> allNetMessageTypesVec(allNetMessageTypes, allNetMessageTypes+ARRAYLEN(allNetMessageTypes));
 
